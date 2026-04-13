@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import { Input } from './components/ui/input';
+import { Label } from './components/ui/label';
 import { ShieldCheck, Mail, Key } from 'lucide-react';
 import { loginWithAccessKey } from './services';
 

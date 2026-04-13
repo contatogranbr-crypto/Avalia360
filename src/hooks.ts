@@ -29,10 +29,12 @@ export interface User {
 
 export const useEvaluations = () => {
   const { profile, isAdmin } = useAuth();
-  const [pendingEvaluations, setPendingEvaluations] = useState<Evaluation[]>([]);
-  const [completedEvaluations, setCompletedEvaluations] = useState<Evaluation[]>([]);
+  const [pendingEvaluations, setPendingEvaluations] = useState<any[]>([]);
+  const [completedEvaluations, setCompletedEvaluations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
+  const [forms, setForms] = useState<any[]>([]);
+  const [formQuestions, setFormQuestions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!profile) return;
@@ -67,10 +69,16 @@ export const useEvaluations = () => {
         const data = await response.json();
         if (data.success) {
           const evals = data.evaluations as Evaluation[];
-          setPendingEvaluations(evals.filter(e => e.status === 'pending'));
-          setCompletedEvaluations(evals.filter(e => e.status === 'completed'));
+          setPendingEvaluations(evals.filter((e: any) => e.status === 'pending'));
+          setCompletedEvaluations(evals.filter((e: any) => e.status === 'completed'));
           if (isAdmin && data.users) {
             setUsers(data.users as User[]);
+          }
+          if (data.forms) {
+            setForms(data.forms);
+          }
+          if (data.form_questions) {
+            setFormQuestions(data.form_questions);
           }
         } else {
           console.error("API Error:", data.error);
@@ -97,5 +105,5 @@ export const useEvaluations = () => {
     };
   }, [profile, isAdmin]);
 
-  return { pendingEvaluations, completedEvaluations, loading, users };
+  return { pendingEvaluations, completedEvaluations, loading, users, forms, formQuestions };
 };

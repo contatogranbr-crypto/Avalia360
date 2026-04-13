@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 
-const app = express();
+const router = express.Router();
 
 // Initialize Supabase Admin (Service Role)
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -27,21 +27,20 @@ if (supabaseAdmin) {
   })();
 }
 
+// Body parser is handled in server.ts
 // Request logger
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+router.use((req, res, next) => {
+  console.log(`[API] ${new Date().toISOString()} - ${req.method} ${req.url}`);
   next();
 });
 
-app.use(express.json());
-
   // Health check
-  app.get('/api/health', (req, res) => {
+  router.get('/health', (req, res) => {
     res.json({ status: 'ok', supabaseConfigured: !!supabaseAdmin });
   });
 
   // API Route for secure login with Access Key
-  app.post('/api/auth/login-with-key', async (req, res) => {
+  router.post('/auth/login-with-key', async (req, res) => {
     const { email, accessKey } = req.body;
 
     if (!email || !accessKey) {
@@ -130,7 +129,7 @@ app.use(express.json());
   });
 
   // API Route to delete user (Admin only)
-  app.post('/api/admin/delete-user', async (req, res) => {
+  router.post('/admin/delete-user', async (req, res) => {
     const { uid, adminEmail, adminAccessKey } = req.body;
 
     if (!uid || !adminEmail || !adminAccessKey) {
@@ -190,7 +189,7 @@ app.use(express.json());
   });
 
   // API Route to create user (Admin only)
-  app.post('/api/admin/create-user', async (req, res) => {
+  router.post('/admin/create-user', async (req, res) => {
     const { userData, accessKey, adminEmail, adminAccessKey } = req.body;
 
     if (!userData || !accessKey || !adminEmail || !adminAccessKey) {
@@ -305,7 +304,7 @@ app.use(express.json());
   });
 
   // API Route to get all data (Admin only)
-  app.post('/api/admin/get-data', async (req, res) => {
+  router.post('/admin/get-data', async (req, res) => {
     const { adminEmail, adminAccessKey } = req.body;
 
     try {
@@ -348,8 +347,109 @@ app.use(express.json());
     }
   });
 
+  // API Route to get custom forms (Admin only)
+  router.post('/admin/get-forms', async (req, res) => {
+    const { adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      const { data: forms } = await supabaseAdmin.from('forms').select('*').order('created_at', { ascending: false });
+      const { data: questions } = await supabaseAdmin.from('form_questions').select('*').order('order_index');
+
+      res.json({ success: true, forms, questions });
+    } catch (error: any) {
+      console.error('Error in get-forms API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // API Route to create custom forms (Admin only)
+  router.post('/admin/create-form', async (req, res) => {
+    const { title, description, questions, adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // Insert Form
+      const { data: newForm, error: formError } = await supabaseAdmin.from('forms').insert({ title, description }).select().single();
+      if (formError || !newForm) throw formError || new Error('Failed to create form');
+
+      // Insert Questions
+      if (questions && questions.length > 0) {
+        const formQuestions = questions.map((q: any, i: number) => ({
+          form_id: newForm.id,
+          question_text: q.question_text,
+          question_type: q.question_type,
+          options: q.options || [],
+          required: q.required ?? true,
+          order_index: i
+        }));
+        
+        const { error: qsError } = await supabaseAdmin.from('form_questions').insert(formQuestions);
+        if (qsError) throw qsError;
+      }
+
+      res.json({ success: true, form: newForm });
+    } catch (error: any) {
+      console.error('Error in create-form API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // API Route to delete custom forms (Admin only)
+  router.post('/admin/delete-form', async (req, res) => {
+    const { formId, adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // Delete Form (Cascade should handle questions if configured, but let's be explicit if not)
+      // Actually, standard Supabase doesn't always have cascade enable by default on manual tables.
+      await supabaseAdmin.from('form_questions').delete().eq('form_id', formId);
+      const { error } = await supabaseAdmin.from('forms').delete().eq('id', formId);
+      
+      if (error) throw error;
+
+      res.json({ success: true, message: 'Formulário excluído com sucesso.' });
+    } catch (error: any) {
+      console.error('Error in delete-form API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // API Route to update user (Admin only)
-  app.post('/api/admin/update-user', async (req, res) => {
+  router.post('/admin/update-user', async (req, res) => {
     const { uid, updateData, adminEmail, adminAccessKey } = req.body;
 
     try {
@@ -396,7 +496,7 @@ app.use(express.json());
   });
 
   // API Route for employees to get their evaluations
-  app.post('/api/user/get-evaluations', async (req, res) => {
+  router.post('/user/get-evaluations', async (req, res) => {
     const { email, accessKey } = req.body;
 
     try {
@@ -434,10 +534,22 @@ app.use(express.json());
             evaluated_department: target?.department
           };
         });
-        return res.json({ success: true, evaluations: evaluationsWithTags });
+
+        // Also fetch forms and questions if there are any forms associated with pending evaluations
+        const pendingFormIds = [...new Set(evaluations.filter(e => e.status === 'pending' && e.form_id).map(e => e.form_id))];
+        let forms = [];
+        let form_questions = [];
+        if (pendingFormIds.length > 0) {
+           const { data: fData } = await supabaseAdmin.from('forms').select('*').in('id', pendingFormIds);
+           const { data: qData } = await supabaseAdmin.from('form_questions').select('*').in('form_id', pendingFormIds).order('order_index');
+           forms = fData || [];
+           form_questions = qData || [];
+        }
+
+        return res.json({ success: true, evaluations: evaluationsWithTags, forms, form_questions });
       }
 
-      res.json({ success: true, evaluations: [] });
+      res.json({ success: true, evaluations: [], forms: [], form_questions: [] });
     } catch (error: any) {
       console.error('Error in get-evaluations API:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
@@ -445,7 +557,7 @@ app.use(express.json());
   });
 
   // API Route to update settings (Admin only)
-  app.post('/api/admin/update-settings', async (req, res) => {
+  router.post('/admin/update-settings', async (req, res) => {
     const { settings, adminEmail, adminAccessKey } = req.body;
 
     try {
@@ -473,7 +585,7 @@ app.use(express.json());
   });
 
   // API Route to trigger a new evaluation cycle (Admin only)
-  app.post('/api/admin/trigger-cycle', async (req, res) => {
+  router.post('/admin/trigger-cycle', async (req, res) => {
     const { adminEmail, adminAccessKey } = req.body;
 
     try {
@@ -540,9 +652,64 @@ app.use(express.json());
     }
   });
 
+  // API Route to trigger a CUSTOM evaluation cycle (Admin only)
+  router.post('/admin/trigger-cycle-custom', async (req, res) => {
+    const { formId, evaluatorIds, evaluatedIds, adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      if (!evaluatorIds || !evaluatedIds || evaluatorIds.length === 0 || evaluatedIds.length === 0) {
+        return res.status(400).json({ error: 'Selecione ao menos um avaliador e um avaliado.' });
+      }
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // Verify components
+      const { data: users } = await supabaseAdmin.from('users').select('uid, name');
+      if (!users) throw new Error('Could not fetch users');
+
+      const evaluators = users.filter(u => evaluatorIds.includes(u.uid));
+      const targets = users.filter(u => evaluatedIds.includes(u.uid));
+
+      const newEvaluations: any[] = [];
+      evaluators.forEach(evaluator => {
+        targets.forEach(target => {
+          // Rule: do we permit self-eval in custom cycle? I'll allow if explicitly selected.
+          newEvaluations.push({
+            form_id: formId || null,
+            evaluator_id: evaluator.uid,
+            evaluator_name: evaluator.name,
+            evaluated_id: target.uid,
+            evaluated_name: target.name,
+            status: 'pending'
+          });
+        });
+      });
+
+      if (newEvaluations.length > 0) {
+        const { error: insertError } = await supabaseAdmin.from('evaluations').insert(newEvaluations);
+        if (insertError) throw insertError;
+      }
+
+      res.json({ success: true, message: `Ciclo personalizado iniciado com ${newEvaluations.length} avaliações.` });
+    } catch (error: any) {
+      console.error('Error in trigger-cycle-custom API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // API Route for employees to submit an evaluation
-  app.post('/api/user/submit-evaluation', async (req, res) => {
-    const { email, accessKey, evaluationId, rating, comment } = req.body;
+  router.post('/user/submit-evaluation', async (req, res) => {
+    const { email, accessKey, evaluationId, rating, comment, answers } = req.body;
 
     try {
       if (!supabaseAdmin) {
@@ -575,8 +742,9 @@ app.use(express.json());
       const { error: updateError } = await supabaseAdmin
         .from('evaluations')
         .update({
-          rating,
-          comment,
+          rating: rating || evaluation.rating,
+          comment: comment || evaluation.comment,
+          answers: answers || null,
           status: 'completed',
           completed_at: new Date().toISOString()
         })
@@ -592,10 +760,13 @@ app.use(express.json());
   });
 
   // Catch-all for unmatched /api routes
-  app.all('/api/*', (req, res) => {
-    console.warn(`Unmatched API route: ${req.method} ${req.url}`);
-    res.status(404).json({ error: 'API route not found' });
+  router.all('/*', (req, res) => {
+    console.warn(`[API 404] Unmatched route: ${req.method} ${req.url}`);
+    res.status(404).json({ 
+      error: 'API route not found', 
+      method: req.method, 
+      url: req.url 
+    });
   });
 
-
-export default app;
+export default router;

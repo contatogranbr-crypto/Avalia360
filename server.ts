@@ -12,8 +12,11 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Global middleware
+  app.use(express.json());
+
   // Mount API endpoints
-  app.use(apiApp);
+  app.use('/api', apiApp);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

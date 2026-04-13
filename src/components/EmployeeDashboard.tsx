@@ -1,24 +1,34 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
 import { useEvaluations } from '../hooks';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Textarea } from './ui/textarea';
-import { Badge } from '../../components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Star, ClipboardCheck, Clock, Send, UserCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '../../lib/utils';
+import { CheckCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { DynamicFormRenderer } from './DynamicFormRenderer';
 
 export const EmployeeDashboard = () => {
-  const { pendingEvaluations, completedEvaluations, loading } = useEvaluations();
+  const { pendingEvaluations, completedEvaluations, loading, forms, formQuestions } = useEvaluations();
   const [selectedEval, setSelectedEval] = useState<any>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [isFormComplete, setIsFormComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (rating === 0) return toast.error('Selecione uma nota');
-    if (comment.length < 50) return toast.error('O comentário deve ter no mínimo 50 caracteres');
+    const isCustomForm = !!selectedEval?.form_id;
+
+    if (isCustomForm) {
+      if (!isFormComplete) return toast.error('Responda todas as perguntas obrigatórias');
+    } else {
+      if (rating === 0) return toast.error('Selecione uma nota');
+      if (comment.length < 50) return toast.error('O comentário deve ter no mínimo 50 caracteres');
+    }
 
     const savedUser = localStorage.getItem('auth_fallback_user');
     if (!savedUser) return;
@@ -33,8 +43,9 @@ export const EmployeeDashboard = () => {
           email: parsed.email,
           accessKey: parsed.access_key || parsed.accessKey,
           evaluationId: selectedEval.id,
-          rating,
-          comment
+          rating: isCustomForm ? null : rating,
+          comment: isCustomForm ? null : comment,
+          answers: isCustomForm ? answers : null
         })
       });
 
@@ -45,6 +56,8 @@ export const EmployeeDashboard = () => {
       setSelectedEval(null);
       setRating(0);
       setComment('');
+      setAnswers({});
+      setIsFormComplete(false);
       window.location.reload(); // Simple way to refresh data
     } catch (error: any) {
       toast.error('Erro ao enviar avaliação: ' + error.message);
@@ -54,6 +67,9 @@ export const EmployeeDashboard = () => {
   };
 
   if (loading) return <div className="p-8 text-center">Carregando avaliações...</div>;
+
+  const currentForm = selectedEval?.form_id ? forms.find((f: any) => f.id === selectedEval.form_id) : null;
+  const currentQuestions = selectedEval?.form_id ? formQuestions.filter((q: any) => q.form_id === selectedEval.form_id) : [];
 
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
@@ -130,72 +146,102 @@ export const EmployeeDashboard = () => {
         {/* Evaluation Form */}
         <div className="md:col-span-2">
           {selectedEval ? (
-            <Card className="border-t-4 border-t-primary shadow-lg">
-              <CardHeader>
-                <CardTitle>Avaliando: {selectedEval.evaluated_name}</CardTitle>
-                <CardDescription>
-                  Sua avaliação é anônima. Seja honesto e construtivo.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Nota Geral (1 a 5 estrelas)</label>
-                  <div className="flex space-x-2">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button
-                        key={star}
-                        onClick={() => setRating(star)}
-                        className={cn(
-                          "p-2 rounded-md transition-colors",
-                          rating >= star ? "text-amber-400" : "text-slate-200 hover:text-slate-300"
-                        )}
-                      >
-                        <Star className="h-8 w-8 fill-current" />
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground italic">
-                    {rating === 1 && "Muito abaixo do esperado"}
-                    {rating === 2 && "Abaixo do esperado"}
-                    {rating === 3 && "Dentro do esperado"}
-                    {rating === 4 && "Acima do esperado"}
-                    {rating === 5 && "Excelente"}
-                  </p>
-                </div>
+            <div className="space-y-6">
+              <Card className="border-t-4 border-t-primary shadow-lg">
+                <CardHeader>
+                  <CardTitle>Avaliando: {selectedEval.evaluated_name}</CardTitle>
+                  <CardDescription>
+                    {currentForm ? currentForm.description || "Preencha o formulário personalizado abaixo." : "Sua avaliação é anônima. Seja honesto e construtivo."}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
 
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Comentário Obrigatório (Mínimo 50 caracteres)</label>
-                  <Textarea 
-                    placeholder="Descreva o desempenho do colaborador, pontos fortes e oportunidades de melhoria..."
-                    className="min-h-[150px]"
-                    value={comment}
-                    onChange={e => setComment(e.target.value)}
+              {currentForm ? (
+                // Custom Form View
+                <div className="space-y-6">
+                  <DynamicFormRenderer 
+                    questions={currentQuestions} 
+                    onChange={(ans, complete) => {
+                      setAnswers(ans);
+                      setIsFormComplete(complete);
+                    }} 
                   />
-                  <div className="flex justify-between items-center">
-                    <span className={cn(
-                      "text-xs font-medium",
-                      comment.length >= 50 ? "text-green-600" : "text-amber-600"
-                    )}>
-                      {comment.length} / 50 caracteres
-                    </span>
-                    {comment.length < 50 && (
-                      <span className="text-xs text-muted-foreground flex items-center">
-                        <AlertCircle className="h-3 w-3 mr-1" /> Faltam {50 - comment.length}
-                      </span>
-                    )}
+                  
+                  <div className="flex justify-end pt-4">
+                    <Button 
+                      className="w-full md:w-auto h-12 px-8" 
+                      disabled={!isFormComplete || submitting}
+                      onClick={handleSubmit}
+                    >
+                      <Send className="mr-2 h-4 w-4" /> 
+                      {submitting ? 'Enviando...' : 'Finalizar Avaliação'}
+                    </Button>
                   </div>
                 </div>
+              ) : (
+                // Legacy View
+                <Card className="shadow-lg">
+                  <CardContent className="space-y-6 pt-6">
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium">Nota Geral (1 a 5 estrelas)</label>
+                      <div className="flex space-x-2">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button
+                            key={star}
+                            onClick={() => setRating(star)}
+                            className={cn(
+                              "p-2 rounded-md transition-colors",
+                              rating >= star ? "text-amber-400" : "text-slate-200 hover:text-slate-300"
+                            )}
+                          >
+                            <Star className="h-8 w-8 fill-current" />
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground italic">
+                        {rating === 1 && "Muito abaixo do esperado"}
+                        {rating === 2 && "Abaixo do esperado"}
+                        {rating === 3 && "Dentro do esperado"}
+                        {rating === 4 && "Acima do esperado"}
+                        {rating === 5 && "Excelente"}
+                      </p>
+                    </div>
 
-                <Button 
-                  className="w-full h-12" 
-                  disabled={rating === 0 || comment.length < 50 || submitting}
-                  onClick={handleSubmit}
-                >
-                  <Send className="mr-2 h-4 w-4" /> 
-                  {submitting ? 'Enviando...' : 'Finalizar Avaliação'}
-                </Button>
-              </CardContent>
-            </Card>
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium">Comentário Obrigatório (Mínimo 50 caracteres)</label>
+                      <Textarea 
+                        placeholder="Descreva o desempenho do colaborador, pontos fortes e oportunidades de melhoria..."
+                        className="min-h-[150px]"
+                        value={comment}
+                        onChange={e => setComment(e.target.value)}
+                      />
+                      <div className="flex justify-between items-center">
+                        <span className={cn(
+                          "text-xs font-medium",
+                          comment.length >= 50 ? "text-green-600" : "text-amber-600"
+                        )}>
+                          {comment.length} / 50 caracteres
+                        </span>
+                        {comment.length < 50 && (
+                          <span className="text-xs text-muted-foreground flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" /> Faltam {50 - comment.length}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button 
+                      className="w-full h-12" 
+                      disabled={rating === 0 || comment.length < 50 || submitting}
+                      onClick={handleSubmit}
+                    >
+                      <Send className="mr-2 h-4 w-4" /> 
+                      {submitting ? 'Enviando...' : 'Finalizar Avaliação'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground bg-slate-50 rounded-xl border-2 border-dashed p-12">
               <ClipboardCheck className="h-16 w-16 mb-4 opacity-20" />

@@ -7,9 +7,10 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { Login } from './Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
-import { Toaster } from '../components/ui/sonner';
-import { Button } from '../components/ui/button';
+import { Toaster } from './components/ui/sonner';
+import { Button } from './components/ui/button';
 import { LogOut, Shield } from 'lucide-react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function AppContent() {
   const { profile, loading, isAdmin } = useAuth();
@@ -61,7 +62,9 @@ function AppContent() {
 
       {/* Main Content */}
       <main className="flex-1">
-        {isAdmin ? <AdminDashboard /> : <EmployeeDashboard />}
+        <ErrorBoundary>
+          {isAdmin ? <AdminDashboard /> : <EmployeeDashboard />}
+        </ErrorBoundary>
       </main>
 
       {/* Footer */}

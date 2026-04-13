@@ -1,19 +1,23 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabase';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Badge } from '../../components/ui/badge';
-import { Progress } from '../../components/ui/progress';
-import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal } from 'lucide-react';
 import { createEmployeeAccount, updateEmployeeProfile, deleteEmployeeAccount } from '../services';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { TriggerCycleDialog } from './TriggerCycleDialog';
+import { FormBuilder } from './FormBuilder';
+import { Form, FormQuestion } from '../types';
 
 export const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -34,6 +38,9 @@ export const AdminDashboard = () => {
   const [selectedUserForDetails, setSelectedUserForDetails] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isTriggerCycleOpen, setIsTriggerCycleOpen] = useState(false);
+  const [isFormBuilderOpen, setIsFormBuilderOpen] = useState(false);
+  const [forms, setForms] = useState<Form[]>([]);
+  const [questionsMap, setQuestionsMap] = useState<Record<string, FormQuestion[]>>({});
   
   // Log Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,6 +48,7 @@ export const AdminDashboard = () => {
   const [evaluatorFilter, setEvaluatorFilter] = useState('all');
   const [evaluatedFilter, setEvaluatedFilter] = useState('all');
   const [deptFilter, setDeptFilter] = useState('all');
+  const [selectedFormIdForCycle, setSelectedFormIdForCycle] = useState<string | undefined>(undefined);
 
   const fetchData = async () => {
     const savedUser = localStorage.getItem('auth_fallback_user');
@@ -80,6 +88,29 @@ export const AdminDashboard = () => {
         const freq = data.settings?.find((s: any) => s.key === 'evaluation_frequency');
         if (freq) setEvaluationFrequency(freq.value);
       }
+
+      // Fetch Forms separately
+      const formsResponse = await fetch('/api/admin/get-forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      const formsData = await formsResponse.json();
+      if (formsData.success) {
+        setForms(formsData.forms || []);
+        
+        // Group questions by form
+        const qMap: Record<string, FormQuestion[]> = {};
+        (formsData.questions || []).forEach((q: FormQuestion) => {
+          if (!qMap[q.form_id!]) qMap[q.form_id!] = [];
+          qMap[q.form_id!].push(q);
+        });
+        setQuestionsMap(qMap);
+      }
+
     } catch (error) {
       console.error("Error fetching admin data:", error);
     }
@@ -113,13 +144,12 @@ export const AdminDashboard = () => {
     }
   };
 
-  const handleTriggerCycle = async () => {
+  const handleTriggerCycleLegacy = async () => {
     const savedUser = localStorage.getItem('auth_fallback_user');
     if (!savedUser) return;
     const parsed = JSON.parse(savedUser);
 
     try {
-      setLoading(true);
       const response = await fetch('/api/admin/trigger-cycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,13 +161,63 @@ export const AdminDashboard = () => {
       const data = await response.json();
       if (data.success) {
         toast.success(data.message);
-        setIsTriggerCycleOpen(false);
         fetchData();
       } else throw new Error(data.error);
     } catch (error: any) {
       toast.error('Erro ao iniciar ciclo: ' + error.message);
-    } finally {
-      setLoading(false);
+      throw error;
+    }
+  };
+
+  const handleTriggerCycleCustom = async (payload: { formId: string; evaluatorIds: string[]; evaluatedIds: string[] }) => {
+    const savedUser = localStorage.getItem('auth_fallback_user');
+    if (!savedUser) return;
+    const parsed = JSON.parse(savedUser);
+
+    try {
+      const response = await fetch('/api/admin/trigger-cycle-custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(data.message);
+        fetchData();
+      } else throw new Error(data.error);
+    } catch (error: any) {
+      toast.error('Erro ao iniciar ciclo: ' + error.message);
+      throw error;
+    }
+  };
+
+  const handleCreateForm = async (formPayload: { title: string; description: string; questions: FormQuestion[] }) => {
+    const savedUser = localStorage.getItem('auth_fallback_user');
+    if (!savedUser) return;
+    const parsed = JSON.parse(savedUser);
+
+    try {
+      const response = await fetch('/api/admin/create-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formPayload,
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Formulário criado com sucesso!');
+        setIsFormBuilderOpen(false);
+        fetchData();
+      } else throw new Error(data.error);
+    } catch (error: any) {
+      toast.error('Erro ao criar formulário: ' + error.message);
     }
   };
 
@@ -267,6 +347,39 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteForm = async (formId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este formulário? Esta ação não pode ser desfeita.')) return;
+    
+    const savedUser = localStorage.getItem('auth_fallback_user');
+    if (!savedUser) return;
+    const parsed = JSON.parse(savedUser);
+
+    try {
+      const response = await fetch('/api/admin/delete-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formId,
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error);
+      
+      toast.success('Formulário excluído com sucesso');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Erro ao excluir formulário: ' + error.message);
+    }
+  };
+
+  const handleOpenCycleWithForm = (formId: string) => {
+    setSelectedFormIdForCycle(formId);
+    setIsTriggerCycleOpen(true);
+  };
+
   // Stats
   const totalUsers = users.length;
   const totalEvals = evaluations.length;
@@ -307,6 +420,7 @@ export const AdminDashboard = () => {
 
   // Dynamic Average for filtered set
   const filteredAverage = useMemo(() => {
+    if (!filteredEvaluations) return 0;
     const completed = filteredEvaluations.filter(e => e.status === 'completed' && e.rating);
     if (completed.length === 0) return 0;
     const sum = completed.reduce((acc, curr) => acc + (curr.rating || 0), 0);
@@ -318,6 +432,22 @@ export const AdminDashboard = () => {
     return Array.from(depts);
   }, [users]);
 
+  if (isFormBuilderOpen) {
+    return (
+      <div className="p-6 bg-slate-100 min-h-screen">
+        <div className="max-w-4xl mx-auto mb-6">
+          <Button variant="ghost" onClick={() => setIsFormBuilderOpen(false)}>
+            ← Voltar ao painel
+          </Button>
+        </div>
+        <FormBuilder 
+          onCancel={() => setIsFormBuilderOpen(false)} 
+          onSave={handleCreateForm} 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto text-slate-900">
       {/* Header */}
@@ -327,6 +457,9 @@ export const AdminDashboard = () => {
           <p className="text-muted-foreground">Gerencie colaboradores, configurações e ciclos de avaliação.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="lg" onClick={() => setIsFormBuilderOpen(true)} className="gap-2">
+            <Layers className="h-5 w-5" /> Criar Formulário
+          </Button>
           <Button variant="outline" size="lg" onClick={() => setIsSettingsOpen(true)} className="gap-2">
             <Settings className="h-5 w-5" /> Configurações
           </Button>
@@ -395,7 +528,24 @@ export const AdminDashboard = () => {
       </div>
     </div>
 
-    {/* Stats Grid */}
+    <Tabs defaultValue="insights" className="space-y-6">
+        <TabsList className="bg-slate-100 p-1 rounded-xl w-full max-w-2xl justify-start">
+          <TabsTrigger value="insights" className="rounded-lg px-6 py-2">
+            <BarChart3 className="h-4 w-4 mr-2" /> Visão Geral
+          </TabsTrigger>
+          <TabsTrigger value="team" className="rounded-lg px-6 py-2">
+            <Users className="h-4 w-4 mr-2" /> Equipe
+          </TabsTrigger>
+          <TabsTrigger value="forms" className="rounded-lg px-6 py-2">
+            <FileText className="h-4 w-4 mr-2" /> Formulários
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="rounded-lg px-6 py-2">
+            <ClipboardList className="h-4 w-4 mr-2" /> Log Ciclos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="insights" className="space-y-6">
+          {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -436,8 +586,53 @@ export const AdminDashboard = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Users Table */}
+      <div className="grid grid-cols-1 gap-8">
+        {/* Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Média de Desempenho (Ranking)</CardTitle>
+            <CardDescription>Visualização comparativa das notas médias dos colaboradores.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[400px]">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" domain={[0, 5]} hide />
+                  <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                  <Tooltip 
+                    cursor={{fill: 'transparent'}}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white p-2 border rounded shadow-sm">
+                            <p className="font-bold">{payload[0].payload.name}</p>
+                            <p className="text-primary">Nota: {payload[0].value}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="avg" radius={[0, 4, 4, 0]}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.avg >= 4 ? "#10b981" : entry.avg >= 3 ? "#3b82f6" : "#f59e0b"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center border-2 border-dashed rounded-xl">
+                <p>Sem dados suficientes</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </TabsContent>
+
+    <TabsContent value="team" className="space-y-6">
+
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Equipe</CardTitle>
@@ -536,53 +731,74 @@ export const AdminDashboard = () => {
             </Table>
           </CardContent>
         </Card>
+      </TabsContent>
 
-        {/* Chart */}
+      <TabsContent value="forms" className="space-y-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Média de Desempenho</CardTitle>
-            <CardDescription>Ranking baseado nas avaliações recebidas.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                <FileText className="h-6 w-6 text-primary" /> Gestão de Formulários
+              </CardTitle>
+              <CardDescription>Personalize as perguntas e critérios de avaliação.</CardDescription>
+            </div>
+            <Button onClick={() => setIsFormBuilderOpen(true)} className="gap-2">
+              <Layers className="h-4 w-4" /> Novo Formulário
+            </Button>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" domain={[0, 5]} hide />
-                  <YAxis dataKey="name" type="category" width={100} fontSize={12} />
-                  <Tooltip 
-                    cursor={{fill: 'transparent'}}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white p-2 border rounded shadow-sm">
-                            <p className="font-bold">{payload[0].payload.name}</p>
-                            <p className="text-primary">Nota: {payload[0].value}</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar dataKey="avg" radius={[0, 4, 4, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.avg >= 4 ? '#10b981' : entry.avg >= 3 ? '#3b82f6' : '#f59e0b'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <BarChart3 className="h-12 w-12 mb-2 opacity-20" />
-                <p>Sem dados suficientes</p>
-              </div>
-            )}
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Criado em</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {forms.map((form) => (
+                  <TableRow key={form.id}>
+                    <TableCell className="font-bold text-primary">{form.title}</TableCell>
+                    <TableCell className="max-w-[300px] truncate text-slate-500">{form.description || '-'}</TableCell>
+                    <TableCell>{new Date(form.created_at || '').toLocaleDateString('pt-BR')}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200 gap-1"
+                          onClick={() => handleOpenCycleWithForm(form.id)}
+                        >
+                          <SendHorizontal className="h-3.5 w-3.5" /> Publicar
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon-sm" 
+                          onClick={() => handleDeleteForm(form.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {forms.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">
+                      Nenhum formulário personalizado criado ainda. Crie um para começar!
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
-      </div>
+      </TabsContent>
 
-      {/* Evaluation Event Log */}
-      <Card className="w-full">
+      <TabsContent value="logs">
+        <Card className="w-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
@@ -693,13 +909,13 @@ export const AdminDashboard = () => {
                 {filteredEvaluations
                   .slice(0, 50)
                   .map((evalItem) => (
-                    <TableRow key={evalItem.id} className="hover:bg-slate-50/50 transition-colors">
+                    <TableRow key={evalItem?.id || Math.random().toString()} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell>
                         <Badge 
-                          variant={evalItem.status === 'completed' ? 'default' : 'secondary'}
-                          className={evalItem.status === 'completed' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-none' : ''}
+                          variant={evalItem?.status === 'completed' ? 'default' : 'secondary'}
+                          className={evalItem?.status === 'completed' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-none' : ''}
                         >
-                          {evalItem.status === 'completed' ? 'Concluído' : 'Pendente'}
+                          {evalItem?.status === 'completed' ? 'Concluído' : 'Pendente'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs font-mono">
@@ -747,6 +963,8 @@ export const AdminDashboard = () => {
           )}
         </CardContent>
       </Card>
+    </TabsContent>
+  </Tabs>
 
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
@@ -952,29 +1170,15 @@ export const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Trigger Cycle Dialog */}
-      <Dialog open={isTriggerCycleOpen} onOpenChange={setIsTriggerCycleOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Iniciar Novo Ciclo</DialogTitle>
-            <DialogDescription>
-              Isso gerará novas avaliações pendentes para todos os colaboradores ativos.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 flex gap-3 text-amber-800 text-sm">
-              <ShieldAlert className="h-5 w-5 shrink-0" />
-              <p>Esta ação criará uma nova rodada de avaliações 360°. Use com cautela de acordo com a periodicidade definida.</p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setIsTriggerCycleOpen(false)}>Cancelar</Button>
-              <Button onClick={handleTriggerCycle} disabled={loading}>
-                {loading ? 'Iniciando...' : 'Confirmar e Iniciar'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TriggerCycleDialog 
+        open={isTriggerCycleOpen} 
+        onOpenChange={setIsTriggerCycleOpen} 
+        users={users} 
+        forms={forms}
+        onTrigger={handleTriggerCycleCustom}
+        onTriggerLegacy={handleTriggerCycleLegacy}
+        defaultFormId={selectedFormIdForCycle}
+      />
 
       {/* Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
