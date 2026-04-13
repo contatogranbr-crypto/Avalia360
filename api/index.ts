@@ -28,15 +28,24 @@ if (supabaseAdmin) {
 }
 
 // Body parser is handled in server.ts
-// Request logger
+// Middleware
+router.use(express.json());
 router.use((req, res, next) => {
-  console.log(`[API] ${new Date().toISOString()} - ${req.method} ${req.url}`);
+  // Simplified logging
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[API] ${req.method} ${req.url}`);
+  }
   next();
 });
 
   // Health check
   router.get('/health', (req, res) => {
-    res.json({ status: 'ok', supabaseConfigured: !!supabaseAdmin });
+    res.json({ 
+      status: 'ok', 
+      supabaseConfigured: !!supabaseAdmin,
+      version: '1.0.1',
+      timestamp: new Date().toISOString()
+    });
   });
 
   // API Route for secure login with Access Key

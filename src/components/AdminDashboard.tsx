@@ -57,6 +57,7 @@ export const AdminDashboard = () => {
     const parsed = JSON.parse(savedUser);
     
     try {
+      console.log("[AdminDashboard] Fetching data from: /api/admin/get-data");
       const response = await fetch('/api/admin/get-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,10 +69,11 @@ export const AdminDashboard = () => {
       
       if (!response.ok) {
         const text = await response.text();
-        console.error(`Admin data fetch failed (${response.status}):`, text);
+        console.error(`[AdminDashboard] Admin data fetch failed (${response.status}):`, text);
         try {
           const errorData = JSON.parse(text);
           toast.error(`Erro: ${errorData.error || 'Falha ao carregar dados'}`);
+          console.error("[AdminDashboard] Error details:", errorData);
         } catch (e) {
           toast.error(`Erro do servidor (${response.status}). Verifique os logs.`);
         }
