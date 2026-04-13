@@ -11,6 +11,11 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl as string, supabaseServiceKey as string)
   : null;
 
+if (!supabaseAdmin) {
+  console.warn('[API] WARNING: Supabase Admin client not initialized. Check your environment variables.');
+}
+
+
 // Cleanup existing evaluations for admins (One-time check on startup)
 if (supabaseAdmin) {
   (async () => {
@@ -778,4 +783,14 @@ router.use((req, res, next) => {
     });
   });
 
-export default router;
+// Vercel / Express App Wrapper
+const app = express();
+app.use(express.json());
+
+// Mount the router at both root and /api for compatibility
+// Localservice server.ts mounts at /api, but Vercel might pass /api or / depending on rewrite config
+app.use('/api', router);
+app.use('/', router);
+
+export default app;
+
