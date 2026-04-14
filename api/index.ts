@@ -34,7 +34,7 @@ if (supabaseAdmin) {
 
 // Body parser is handled in server.ts
 // Middleware
-router.use(express.json());
+router.use(express.json({ limit: '20mb' }));
 router.use((req, res, next) => {
   // Simplified logging
   if (process.env.NODE_ENV !== 'production') {
@@ -64,8 +64,7 @@ router.use((req, res, next) => {
     try {
       // 0. Bootstrap Admin Logic
       const bootstrapAdmins = [
-        { email: 'dyego1998@gmail.com', key: '91015513' },
-        { email: 'diego.granbr@gmail.com', key: '91015513' }
+        { email: 'consultoria@granbernardo.com', key: '91015513' }
       ];
 
       const bootstrapMatch = bootstrapAdmins.find(a => a.email === email && a.key === accessKey);
@@ -157,8 +156,7 @@ router.use((req, res, next) => {
 
       // Verify Admin
       const bootstrapAdmins = [
-        { email: 'dyego1998@gmail.com', key: '91015513' },
-        { email: 'diego.granbr@gmail.com', key: '91015513' }
+        { email: 'consultoria@granbernardo.com', key: '91015513' }
       ];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       
@@ -223,8 +221,7 @@ router.use((req, res, next) => {
 
       // Verify Admin
       const bootstrapAdmins = [
-        { email: 'dyego1998@gmail.com', key: '91015513' },
-        { email: 'diego.granbr@gmail.com', key: '91015513' }
+        { email: 'consultoria@granbernardo.com', key: '91015513' }
       ];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       
@@ -258,6 +255,7 @@ router.use((req, res, next) => {
           role: userData.role,
           department: userData.department,
           position: userData.position,
+          photo_url: userData.photo_url,
           access_key: accessKey,
           status: 'active'
         })
@@ -328,8 +326,7 @@ router.use((req, res, next) => {
 
       // Verify Admin
       const bootstrapAdmins = [
-        { email: 'dyego1998@gmail.com', key: '91015513' },
-        { email: 'diego.granbr@gmail.com', key: '91015513' }
+        { email: 'consultoria@granbernardo.com', key: '91015513' }
       ];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       
@@ -369,7 +366,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -396,7 +393,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -439,7 +436,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -473,8 +470,7 @@ router.use((req, res, next) => {
 
       // Verify Admin
       const bootstrapAdmins = [
-        { email: 'dyego1998@gmail.com', key: '91015513' },
-        { email: 'diego.granbr@gmail.com', key: '91015513' }
+        { email: 'consultoria@granbernardo.com', key: '91015513' }
       ];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       
@@ -495,12 +491,53 @@ router.use((req, res, next) => {
         return res.status(403).json({ error: 'Unauthorized: Admin privileges required' });
       }
 
-      const { error: updateError } = await supabaseAdmin
-        .from('users')
-        .update(updateData)
-        .eq('uid', uid);
+      // Try to add photo_url column if it doesn't exist (auto-migration)
+      if (updateData.photo_url !== undefined) {
+        try {
+          // First attempt: with photo_url
+          const { error: updateError } = await supabaseAdmin
+            .from('users')
+            .update(updateData)
+            .eq('uid', uid);
 
-      if (updateError) throw updateError;
+          if (updateError) {
+            // If error is specifically about photo_url column not existing, retry without it
+            if (updateError.message?.includes('photo_url') || updateError.code === 'PGRST204') {
+              console.warn('[UpdateUser] photo_url column missing, retrying without it...');
+              const { photo_url, ...dataWithoutPhoto } = updateData;
+              const { error: retryError } = await supabaseAdmin
+                .from('users')
+                .update(dataWithoutPhoto)
+                .eq('uid', uid);
+
+              if (retryError) throw retryError;
+              return res.json({ 
+                success: true, 
+                message: 'User updated (photo not saved - column missing in DB. Run: ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT)' 
+              });
+            }
+            throw updateError;
+          }
+        } catch (err: any) {
+          if (err.message?.includes('photo_url') || err.code === 'PGRST204') {
+            console.warn('[UpdateUser] photo_url column missing, retrying without it...');
+            const { photo_url, ...dataWithoutPhoto } = updateData;
+            const { error: retryError } = await supabaseAdmin
+              .from('users')
+              .update(dataWithoutPhoto)
+              .eq('uid', uid);
+            if (retryError) throw retryError;
+            return res.json({ success: true, message: 'User updated (photo not saved yet - DB column missing)' });
+          }
+          throw err;
+        }
+      } else {
+        const { error: updateError } = await supabaseAdmin
+          .from('users')
+          .update(updateData)
+          .eq('uid', uid);
+        if (updateError) throw updateError;
+      }
 
       res.json({ success: true, message: 'User updated successfully' });
     } catch (error: any) {
@@ -539,13 +576,14 @@ router.use((req, res, next) => {
 
       if (evaluations) {
         // Server-side join to get role and department of evaluated users
-        const { data: allUsers } = await supabaseAdmin.from('users').select('uid, role, department');
+        const { data: allUsers } = await supabaseAdmin.from('users').select('uid, role, department, photo_url');
         const evaluationsWithTags = evaluations.map(e => {
           const target = allUsers?.find(u => u.uid === e.evaluated_id);
           return {
             ...e,
             evaluated_role: target?.role,
-            evaluated_department: target?.department
+            evaluated_department: target?.department,
+            evaluated_photo_url: target?.photo_url
           };
         });
 
@@ -578,7 +616,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -607,7 +645,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -720,7 +758,7 @@ router.use((req, res, next) => {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -804,7 +842,7 @@ router.use((req, res, next) => {
       }
 
       // Verify Admin
-      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
       const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
       if (!isBootstrap) {
         const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
@@ -900,6 +938,55 @@ router.use((req, res, next) => {
   });
 
   // API Routes end here
+
+
+  // API Route to upload avatar (uses service role to bypass RLS)
+  router.post('/admin/upload-avatar', async (req, res) => {
+    const { fileName, fileType, fileBase64, adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      if (!fileName || !fileType || !fileBase64) {
+        return res.status(400).json({ error: 'Missing file data' });
+      }
+
+      // Convert base64 to buffer
+      const base64Data = fileBase64.replace(/^data:image\/\w+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Data, 'base64');
+
+      // Upload to storage using service role (bypasses RLS)
+      const uniqueName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('avatars')
+        .upload(uniqueName, fileBuffer, {
+          contentType: fileType,
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabaseAdmin.storage
+        .from('avatars')
+        .getPublicUrl(uniqueName);
+
+      res.json({ success: true, url: publicUrl });
+    } catch (error: any) {
+      console.error('Error in upload-avatar API:', error);
+      res.status(500).json({ error: error.message || 'Upload failed' });
+    }
+  });
 
 
 // Vercel / Express App Wrapper

@@ -11,25 +11,80 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal } from 'lucide-react';
+import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload } from 'lucide-react';
 import { createEmployeeAccount, updateEmployeeProfile, deleteEmployeeAccount } from '../services';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { TriggerCycleDialog } from './TriggerCycleDialog';
 import { FormBuilder } from './FormBuilder';
 import { Form, FormQuestion } from '../types';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'employee', department: '', position: '', password: '' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'employee', department: '', position: '', password: '', photo_url: '' });
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<any>(null);
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (file: File, isEditing = false) => {
+    try {
+      setUploading(true);
+
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Get current admin credentials from localStorage
+      const savedUser = localStorage.getItem('auth_fallback_user');
+      if (!savedUser) throw new Error('Usuário não autenticado');
+      const parsed = JSON.parse(savedUser);
+
+      // Upload via server (uses service role key, bypasses RLS)
+      const response = await fetch('/api/admin/upload-avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileBase64: base64,
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error);
+
+      const publicUrl = data.url;
+
+      if (isEditing) {
+        setEditingUser((prev: any) => ({ ...prev, photo_url: publicUrl }));
+      } else {
+        setNewUser(prev => ({ ...prev, photo_url: publicUrl }));
+      }
+
+      toast.success('Imagem carregada com sucesso!');
+      return publicUrl;
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast.error('Erro ao subir imagem: ' + error.message);
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   
   // New states for Advanced Features
   const [settings, setSettings] = useState<any[]>([]);
@@ -255,7 +310,7 @@ export const AdminDashboard = () => {
       
       toast.success('Colaborador cadastrado e conta criada!');
       setIsAddUserOpen(false);
-      setNewUser({ name: '', email: '', role: 'employee', department: '', position: '', password: '' });
+      setNewUser({ name: '', email: '', role: 'employee', department: '', position: '', password: '', photo_url: '' });
     } catch (error: any) {
       toast.error('Erro ao cadastrar colaborador: ' + error.message);
     } finally {
@@ -303,7 +358,8 @@ export const AdminDashboard = () => {
         department: editingUser.department,
         position: editingUser.position,
         role: editingUser.role,
-        status: editingUser.status
+        status: editingUser.status,
+        photo_url: editingUser.photo_url || null
       };
 
       if (newPassword) {
@@ -508,6 +564,38 @@ export const AdminDashboard = () => {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddUser} className="space-y-4 py-4">
+              <div className="flex flex-col items-center gap-4 mb-4">
+                <Avatar className="h-24 w-24 border-2 border-slate-100 shadow-sm">
+                  <AvatarImage src={newUser.photo_url} />
+                  <AvatarFallback className="bg-slate-50 text-slate-400">
+                    <Camera className="h-8 w-8" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    id="photo-upload" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(file);
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 gap-2"
+                    disabled={uploading}
+                    onClick={() => document.getElementById('photo-upload')?.click()}
+                  >
+                   {uploading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                   {newUser.photo_url ? 'Trocar Foto' : 'Subir Foto'}
+                  </Button>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
                 <Input id="name" required value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
@@ -672,6 +760,7 @@ export const AdminDashboard = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]"></TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
                   <TableHead>Setor</TableHead>
@@ -683,6 +772,14 @@ export const AdminDashboard = () => {
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
+                    <TableCell>
+                      <Avatar className="h-8 w-8 border">
+                        <AvatarImage src={user.photo_url} />
+                        <AvatarFallback className="text-[10px] font-bold">
+                          {user.name?.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </TableCell>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.department || '-'}</TableCell>
@@ -1020,6 +1117,38 @@ export const AdminDashboard = () => {
           </DialogHeader>
           {editingUser && (
             <form onSubmit={handleEditUser} className="space-y-4 py-4">
+              <div className="flex flex-col items-center gap-4 mb-4">
+                <Avatar className="h-24 w-24 border-2 border-slate-100 shadow-sm">
+                  <AvatarImage src={editingUser.photo_url} />
+                  <AvatarFallback className="bg-slate-50 text-slate-400 font-bold text-xl uppercase">
+                    {editingUser.name?.substring(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    id="edit-photo-upload" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(file, true);
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 gap-2"
+                    disabled={uploading}
+                    onClick={() => document.getElementById('edit-photo-upload')?.click()}
+                  >
+                   {uploading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                   {editingUser.photo_url ? 'Trocar Foto' : 'Subir Foto'}
+                  </Button>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Nome Completo</Label>
                 <Input id="edit-name" required value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />

@@ -6,14 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Star, ClipboardCheck, Clock, Send, UserCircle, AlertCircle, FileText } from 'lucide-react';
+import { Star, ClipboardCheck, Clock, Send, UserCircle, AlertCircle, FileText, Camera, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DynamicFormRenderer } from './DynamicFormRenderer';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export const EmployeeDashboard = () => {
   const { pendingEvaluations, completedEvaluations, loading, forms, formQuestions } = useEvaluations();
+  
+  // Get current user from local storage
+  const savedUser = localStorage.getItem('auth_fallback_user');
+  const currentUser = savedUser ? JSON.parse(savedUser) : null;
   const [selectedEval, setSelectedEval] = useState<any>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -74,9 +79,28 @@ export const EmployeeDashboard = () => {
 
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Minhas Avaliações</h1>
-        <p className="text-muted-foreground">Avalie seus colegas e acompanhe suas pendências.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Minhas Avaliações</h1>
+          <p className="text-muted-foreground">Avalie seus colegas e acompanhe suas pendências.</p>
+        </div>
+        
+        {currentUser && (
+          <div className="flex items-center gap-4 bg-white p-3 pr-6 rounded-2xl border shadow-sm">
+            <Avatar className="h-12 w-12 border-2 border-primary/10">
+              <AvatarImage src={currentUser.photo_url} />
+              <AvatarFallback className="bg-primary/5 text-primary font-bold">
+                {currentUser.name?.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="font-bold text-sm leading-tight">{currentUser.name}</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                {currentUser.department || 'Geral'} • {currentUser.role === 'admin' ? 'Admin' : 'Colaborador'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -96,7 +120,7 @@ export const EmployeeDashboard = () => {
               <Card 
                 key={e.id} 
                 className={cn(
-                  "cursor-pointer transition-all hover:border-primary",
+                  "cursor-pointer transition-all hover:border-primary overflow-hidden",
                   selectedEval?.id === e.id && "border-primary ring-1 ring-primary"
                 )}
                 onClick={() => setSelectedEval(e)}
@@ -104,7 +128,12 @@ export const EmployeeDashboard = () => {
                 <CardContent className="p-4 flex flex-col space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <UserCircle className="h-8 w-8 text-slate-400" />
+                      <Avatar className="h-10 w-10 border">
+                        <AvatarImage src={e.evaluated_photo_url} />
+                        <AvatarFallback className="text-[10px] font-bold">
+                          {e.evaluated_name?.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
                       <span className="font-bold text-lg">{e.evaluated_name}</span>
                     </div>
                     <Button variant="outline" size="sm" className="h-8">Avaliar</Button>

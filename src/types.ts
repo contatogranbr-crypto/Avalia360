@@ -7,6 +7,7 @@ export interface User {
   department?: string;
   access_key: string;
   status: string;
+  photo_url?: string;
   created_at: string;
 }
 
@@ -44,4 +45,5 @@ export interface Evaluation {
   created_at: string;
   evaluated_role?: string;
   evaluated_department?: string;
+  evaluated_photo_url?: string;
 }

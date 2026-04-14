@@ -12,8 +12,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Global middleware
-  app.use(express.json());
+  // Global middleware - increased limit for image uploads (base64)
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
   // Mount API endpoints
   app.use('/api', apiApp);

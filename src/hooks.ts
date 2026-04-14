@@ -14,6 +14,7 @@ export interface Evaluation {
   completed_at?: any;
   evaluated_role?: 'admin' | 'employee';
   evaluated_department?: string;
+  evaluated_photo_url?: string;
 }
 
 export interface User {
@@ -25,6 +26,7 @@ export interface User {
   department?: string;
   position?: string;
   status: 'active' | 'inactive';
+  photo_url?: string;
 }
 
 export const useEvaluations = () => {
