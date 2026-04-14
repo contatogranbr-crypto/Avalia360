@@ -752,7 +752,7 @@ router.use((req, res, next) => {
 
   // API Route to trigger a new evaluation cycle (Admin only)
   router.post('/admin/trigger-cycle', async (req, res) => {
-    const { adminEmail, adminAccessKey } = req.body;
+    const { adminEmail, adminAccessKey, includeSelf } = req.body;
 
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
@@ -771,6 +771,7 @@ router.use((req, res, next) => {
       const { data: activeUsers } = await supabaseAdmin.from('users').select('*').eq('status', 'active');
       if (!activeUsers) throw new Error('No active users found');
 
+      console.log(`[TriggerCycle] Initiated. includeSelf: ${includeSelf}`);
       console.log(`[TriggerCycle] Found ${activeUsers.length} active users.`);
       
       // 2. Generate 360 evaluations (STRICT: everyone evaluates everyone else, EXCLUDING ALL ADMINS)
@@ -789,25 +790,28 @@ router.use((req, res, next) => {
         });
 
         activeUsers.forEach(evaluated => {
-          // Rule: Evaluator must not be self AND Evaluator must not be admin AND Target must not be admin
+          // Rule: Evaluator must not be admin AND Target must not be admin
+          // Rule: Evaluator must not be self UNLESS includeSelf is true
           const isSelf = evaluator.uid === evaluated.uid;
           const isEvaluatorAdmin = evaluator.role === 'admin';
           const isTargetAdmin = evaluated.role === 'admin';
 
-          if (!isSelf && !isEvaluatorAdmin && !isTargetAdmin) {
-            newEvaluations.push({
-              evaluator_id: evaluator.uid,
-              evaluator_name: evaluator.name,
-              evaluated_id: evaluated.uid,
-              evaluated_name: evaluated.name,
-              form_id: '36000000-0000-0000-0000-000000000001', // NOW USING THE NEW FORM UUID
-              status: 'pending'
-            });
-          }
+          if (isEvaluatorAdmin || isTargetAdmin) return;
+          if (isSelf && !includeSelf) return;
+
+          newEvaluations.push({
+            evaluator_id: evaluator.uid,
+            evaluator_name: evaluator.name,
+            evaluated_id: evaluated.uid,
+            evaluated_name: evaluated.name,
+            form_id: '36000000-0000-0000-0000-000000000001', // NOW USING THE NEW FORM UUID
+            status: 'pending'
+          });
         });
       });
 
-      console.log(`[TriggerCycle] Prep ${newEvaluations.length} new evaluations (Comp + Org).`);
+      const selfEvalsCount = newEvaluations.filter(e => e.evaluator_id === e.evaluated_id).length;
+      console.log(`[TriggerCycle] Generated ${newEvaluations.length} total evaluations. Self-evaluations: ${selfEvalsCount}`);
 
       if (newEvaluations.length > 0) {
         const { error: insertError } = await supabaseAdmin.from('evaluations').insert(newEvaluations);

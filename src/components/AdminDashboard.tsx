@@ -203,7 +203,7 @@ export const AdminDashboard = () => {
     }
   };
 
-  const handleTriggerCycleLegacy = async () => {
+  const handleTriggerCycleLegacy = async (includeSelf: boolean = false) => {
     const savedUser = localStorage.getItem('auth_fallback_user');
     if (!savedUser) return;
     const parsed = JSON.parse(savedUser);
@@ -213,6 +213,7 @@ export const AdminDashboard = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          includeSelf,
           adminEmail: parsed.email,
           adminAccessKey: parsed.access_key || parsed.accessKey
         })

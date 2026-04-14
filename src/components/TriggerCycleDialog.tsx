@@ -14,7 +14,7 @@ interface TriggerCycleDialogProps {
   users: User[];
   forms: Form[];
   onTrigger: (payload: { formId: string; evaluatorIds: string[]; evaluatedIds: string[] }) => Promise<void>;
-  onTriggerLegacy: () => Promise<void>;
+  onTriggerLegacy: (includeSelf: boolean) => Promise<void>;
   defaultFormId?: string;
 }
 
@@ -22,6 +22,7 @@ export const TriggerCycleDialog: React.FC<TriggerCycleDialogProps> = ({ open, on
   const [loading, setLoading] = useState(false);
   const [cycleType, setCycleType] = useState<'legacy' | 'custom'>(defaultFormId ? 'custom' : 'legacy');
   const [selectedFormId, setSelectedFormId] = useState<string>(defaultFormId || 'none');
+  const [includeSelf, setIncludeSelf] = useState(true);
   const [evaluatorIds, setEvaluatorIds] = useState<string[]>([]);
   const [evaluatedIds, setEvaluatedIds] = useState<string[]>([]);
 
@@ -60,7 +61,7 @@ export const TriggerCycleDialog: React.FC<TriggerCycleDialogProps> = ({ open, on
     setLoading(true);
     try {
       if (cycleType === 'legacy') {
-        await onTriggerLegacy();
+        await onTriggerLegacy(includeSelf);
       } else {
         if (evaluatorIds.length === 0 || evaluatedIds.length === 0) {
           toast.error('Selecione pelo menos um avaliador e um avaliado.');
@@ -107,6 +108,22 @@ export const TriggerCycleDialog: React.FC<TriggerCycleDialogProps> = ({ open, on
             >
               <Layers className="mr-2 h-4 w-4" /> Ciclo Personalizado
             </Button>
+          </div>
+
+          <div className="flex items-center space-x-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <Checkbox 
+              id="include-self" 
+              checked={includeSelf} 
+              onCheckedChange={(checked) => setIncludeSelf(!!checked)} 
+            />
+            <div className="grid gap-1.5 leading-none">
+              <Label htmlFor="include-self" className="text-sm font-bold cursor-pointer">
+                Incluir Autoavaliação
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Permite que o colaborador avalie a si mesmo com as mesmas perguntas.
+              </p>
+            </div>
           </div>
 
           {cycleType === 'legacy' ? (
