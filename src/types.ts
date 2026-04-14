@@ -17,6 +17,7 @@ export interface FormQuestion {
   question_type: 'short_text' | 'paragraph' | 'multiple_choice' | 'checkboxes' | 'dropdown' | 'linear_scale' | 'rating';
   options?: any; // For choices: string[], for scale: { min: 1, max: 5, minLabel: '', maxLabel: '' }
   required: boolean;
+  category?: string;
   order_index?: number;
   created_at?: string;
 }

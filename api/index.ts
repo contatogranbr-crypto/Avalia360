@@ -598,6 +598,120 @@ router.use((req, res, next) => {
     }
   });
 
+  // API Route to initialize the new default evaluation structure (V2)
+  router.post('/admin/setup-default-forms', async (req, res) => {
+    console.log('[SETUP] Initializing default forms structure (UUID Version)...');
+    const { adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'dyego1998@gmail.com', key: '91015513' }, { email: 'diego.granbr@gmail.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // 1. Create the Main 360 Form (Competencies)
+      const MAIN_FORM_ID = '36000000-0000-0000-0000-000000000001';
+      const { data: mainForm, error: formError } = await supabaseAdmin.from('forms').upsert({
+        id: MAIN_FORM_ID,
+        title: 'Avaliação de Competências 360',
+        description: 'Avaliação técnica e comportamental dos colaboradores.'
+      }, { onConflict: 'id' }).select().single();
+
+      if (formError) throw formError;
+
+      // 2. Define Questions for the Main Form
+      const qualitativeOptions = ['Nunca', 'Algumas Vezes', 'Sempre'];
+      const questionsData = [
+        { cat: 'Liderança', q: 'Consegue influenciar os demais colaboradores e motivá-los a participar dos projetos propostos?' },
+        { cat: 'Liderança', q: 'Entende a diversidade de personalidades e consegue despertar o melhor de cada uma?' },
+        { cat: 'Integridade Moral', q: 'Trabalha de forma ética?' },
+        { cat: 'Integridade Moral', q: 'Busca a imparcialidade e a justiça quando há desavença de opiniões?' },
+        { cat: 'Versatilidade', q: 'Motiva as pessoas da equipe que faz parte a buscarem soluções para os problemas de seus departamentos?' },
+        { cat: 'Versatilidade', q: 'Não foge de novas responsabilidades e enfrenta as dificuldades com criatividade?' },
+        { cat: 'Relacionamento', q: 'Sabe unir os colaboradores na busca do verdadeiro trabalho em equipe?' },
+        { cat: 'Relacionamento', q: 'Procura conciliar as opiniões e reaproximar as pessoas quando ocorrem conflitos?' },
+        { cat: 'Olhar sistêmico', q: 'Enxerga necessidades de soluções para problemas de clientes e da empresa e solicita auxílio dos líderes?' },
+        { cat: 'Olhar sistêmico', q: 'Percebe a importância de se conectar com os outros departamentos da organização para cumprir suas tarefas?' },
+        { cat: 'Trabalho em equipe', q: 'Busca o diálogo e a troca de opiniões no grupo para que todos encontrem juntos a melhor solução?' },
+        { cat: 'Trabalho em equipe', q: 'Consegue trabalhar em grupo sem causar conflitos e estimulando a participação coletiva?' },
+        { cat: 'Responsabilidade', q: 'Cumpre seus prazos e busca atingir seus objetivos ao desempenhar seu trabalho?' },
+        { cat: 'Responsabilidade', q: 'Procura alcançar altos níveis de qualidade conforme o padrão estabelecido pela empresa?' },
+        { cat: 'Comunicação', q: 'Passa as informações necessárias para seu grupo de trabalho?' },
+        { cat: 'Comunicação', q: 'Comunica-se com lealdade, sem esconder fatos ou omitir informações?' },
+        { cat: 'Foco em resultados', q: 'Engaja o grupo em busca do atingimento dos objetivos?' },
+        { cat: 'Foco em resultados', q: 'Direciona seus esforços para atingir os objetivos da empresa?' },
+        { cat: 'Organização', q: 'Sabe definir prioridades para alocar seu tempo de forma a desempenhar várias tarefas ao mesmo tempo de forma eficiente?' },
+        { cat: 'Organização', q: 'Sabe usar seu tempo de forma adequada?' }
+      ];
+
+      // Delete old questions for this form to avoid duplicates
+      await supabaseAdmin.from('form_questions').delete().eq('form_id', MAIN_FORM_ID);
+      const { error: qError } = await supabaseAdmin.from('form_questions').insert(
+        questionsData.map((d, i) => ({
+          form_id: MAIN_FORM_ID,
+          question_text: `${d.cat}: ${d.q}`,
+          question_type: 'multiple_choice',
+          options: qualitativeOptions,
+          required: true,
+          order_index: i
+        }))
+      );
+      if (qError) throw qError;
+
+      // 3. Create the Organizational Form
+      const ORG_FORM_ID = '36000000-0000-0000-0000-000000000002';
+      const { data: orgForm, error: orgFormError } = await supabaseAdmin.from('forms').upsert({
+        id: ORG_FORM_ID,
+        title: 'Avaliação Organizacional (Empresa)',
+        description: 'Sua opinião sobre o ambiente de trabalho e a cultura da empresa.'
+      }, { onConflict: 'id' }).select().single();
+
+      if (orgFormError) throw orgFormError;
+
+      const orgQuestionsData = [
+        { cat: 'Ambiente de Trabalho e Liderança', q: 'Você se sente motivado a realizar seu trabalho?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Ambiente de Trabalho e Liderança', q: 'Sua liderança direta fornece feedbacks claros e construtivos?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Ambiente de Trabalho e Liderança', q: 'A empresa promove um ambiente de respeito e colaboração?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Carreira e Desenvolvimento', q: 'Você vê oportunidades de crescimento profissional aqui?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Carreira e Desenvolvimento', q: 'Sente que recebeu treinamento adequado para suas funções?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Comunicação e Cultura', q: 'A comunicação interna é clara e transparente?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Comunicação e Cultura', q: 'Você se identifica com os valores e a missão da empresa?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Equilíbrio e Benefícios', q: 'Você consegue manter um equilíbrio saudável entre vida pessoal e profissional?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Equilíbrio e Benefícios', q: 'Como você avalia o pacote de benefícios oferecido?', type: 'multiple_choice', opts: qualitativeOptions },
+        { cat: 'Feedback Aberto', q: 'O que você mudaria na empresa para torná-la um lugar melhor de trabalho?', type: 'paragraph', opts: null },
+        { cat: 'Feedback Aberto', q: 'Comentários adicionais. (opcional)', type: 'paragraph', opts: null, req: false }
+      ];
+
+      const orgQuestionsToInsert = orgQuestionsData.map((d, i) => ({
+        form_id: ORG_FORM_ID,
+        question_text: `${d.cat}: ${d.q}`, // PREFIX USED HERE
+        question_type: d.type,
+        options: d.opts,
+        required: d.req !== undefined ? d.req : true,
+        order_index: i
+      }));
+
+      await supabaseAdmin.from('form_questions').delete().eq('form_id', ORG_FORM_ID);
+      await supabaseAdmin.from('form_questions').insert(orgQuestionsToInsert);
+
+      res.json({ 
+        success: true, 
+        message: 'Estrutura de formulários inicializada com sucesso.',
+        forms: [MAIN_FORM_ID, ORG_FORM_ID]
+      });
+    } catch (error: any) {
+      console.error('Error in setup-default-forms API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // API Route to trigger a new evaluation cycle (Admin only)
   router.post('/admin/trigger-cycle', async (req, res) => {
     const { adminEmail, adminAccessKey } = req.body;
@@ -620,11 +734,22 @@ router.use((req, res, next) => {
       if (!activeUsers) throw new Error('No active users found');
 
       console.log(`[TriggerCycle] Found ${activeUsers.length} active users.`);
-      activeUsers.forEach(u => console.log(` - User: ${u.email}, Role: ${u.role}, UID: ${u.uid}`));
-
+      
       // 2. Generate 360 evaluations (STRICT: everyone evaluates everyone else, EXCLUDING ALL ADMINS)
       const newEvaluations: any[] = [];
+      
+      // 2.1 Colleague-to-Colleague (Competencies)
       activeUsers.forEach(evaluator => {
+        // One Organizational (Company) evaluation per user
+        newEvaluations.push({
+          evaluator_id: evaluator.uid,
+          evaluator_name: evaluator.name,
+          evaluated_id: 'organizational',
+          evaluated_name: 'Minha Opinião sobre a Empresa',
+          form_id: '36000000-0000-0000-0000-000000000002',
+          status: 'pending'
+        });
+
         activeUsers.forEach(evaluated => {
           // Rule: Evaluator must not be self AND Evaluator must not be admin AND Target must not be admin
           const isSelf = evaluator.uid === evaluated.uid;
@@ -637,17 +762,18 @@ router.use((req, res, next) => {
               evaluator_name: evaluator.name,
               evaluated_id: evaluated.uid,
               evaluated_name: evaluated.name,
+              form_id: '36000000-0000-0000-0000-000000000001', // NOW USING THE NEW FORM UUID
               status: 'pending'
             });
           }
         });
       });
 
-      console.log(`[TriggerCycle] Prep ${newEvaluations.length} new employee-to-employee evaluations.`);
+      console.log(`[TriggerCycle] Prep ${newEvaluations.length} new evaluations (Comp + Org).`);
 
       if (newEvaluations.length > 0) {
         const { error: insertError } = await supabaseAdmin.from('evaluations').insert(newEvaluations);
-        if (insertError) console.error('[TriggerCycle] Insert Error:', insertError);
+        if (insertError) throw insertError;
       }
 
       // Cleanup: Purge any evaluations where an admin is involved (in case of legacy data)
@@ -659,7 +785,7 @@ router.use((req, res, next) => {
         await supabaseAdmin.from('evaluations').delete().in('evaluated_id', adminUids);
       }
 
-      res.json({ success: true, message: `Novo ciclo iniciado com ${newEvaluations.length} avaliações. Administradores foram excluídos do ciclo.` });
+      res.json({ success: true, message: `Novo ciclo iniciado com ${newEvaluations.length} avaliações utilizando o novo padrão. Administradores foram excluídos do ciclo.` });
     } catch (error: any) {
       console.error('Error in trigger-cycle API:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
@@ -773,15 +899,8 @@ router.use((req, res, next) => {
     }
   });
 
-  // Catch-all for unmatched /api routes
-  router.all('/*', (req, res) => {
-    console.warn(`[API 404] Unmatched route: ${req.method} ${req.url}`);
-    res.status(404).json({ 
-      error: 'API route not found', 
-      method: req.method, 
-      url: req.url 
-    });
-  });
+  // API Routes end here
+
 
 // Vercel / Express App Wrapper
 const app = express();

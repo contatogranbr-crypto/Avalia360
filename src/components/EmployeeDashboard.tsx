@@ -179,65 +179,14 @@ export const EmployeeDashboard = () => {
                   </div>
                 </div>
               ) : (
-                // Legacy View
-                <Card className="shadow-lg">
-                  <CardContent className="space-y-6 pt-6">
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium">Nota Geral (1 a 5 estrelas)</label>
-                      <div className="flex space-x-2">
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <button
-                            key={star}
-                            onClick={() => setRating(star)}
-                            className={cn(
-                              "p-2 rounded-md transition-colors",
-                              rating >= star ? "text-amber-400" : "text-slate-200 hover:text-slate-300"
-                            )}
-                          >
-                            <Star className="h-8 w-8 fill-current" />
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground italic">
-                        {rating === 1 && "Muito abaixo do esperado"}
-                        {rating === 2 && "Abaixo do esperado"}
-                        {rating === 3 && "Dentro do esperado"}
-                        {rating === 4 && "Acima do esperado"}
-                        {rating === 5 && "Excelente"}
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium">Comentário Obrigatório (Mínimo 50 caracteres)</label>
-                      <Textarea 
-                        placeholder="Descreva o desempenho do colaborador, pontos fortes e oportunidades de melhoria..."
-                        className="min-h-[150px]"
-                        value={comment}
-                        onChange={e => setComment(e.target.value)}
-                      />
-                      <div className="flex justify-between items-center">
-                        <span className={cn(
-                          "text-xs font-medium",
-                          comment.length >= 50 ? "text-green-600" : "text-amber-600"
-                        )}>
-                          {comment.length} / 50 caracteres
-                        </span>
-                        {comment.length < 50 && (
-                          <span className="text-xs text-muted-foreground flex items-center">
-                            <AlertCircle className="h-3 w-3 mr-1" /> Faltam {50 - comment.length}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <Button 
-                      className="w-full h-12" 
-                      disabled={rating === 0 || comment.length < 50 || submitting}
-                      onClick={handleSubmit}
-                    >
-                      <Send className="mr-2 h-4 w-4" /> 
-                      {submitting ? 'Enviando...' : 'Finalizar Avaliação'}
-                    </Button>
+                // Legacy View (No longer used for new cycles, but kept for compatibility)
+                <Card className="shadow-lg border-amber-200 bg-amber-50">
+                  <CardContent className="p-12 text-center space-y-4">
+                    <AlertCircle className="h-12 w-12 text-amber-500 mx-auto" />
+                    <h3 className="text-lg font-bold">Avaliação sem formulário definido</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                      Esta avaliação utiliza o sistema antigo. Por favor, solicite ao administrador para utilizar os novos ciclos baseados em formulários qualitativos.
+                    </p>
                   </CardContent>
                 </Card>
               )}

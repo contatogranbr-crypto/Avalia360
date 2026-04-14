@@ -32,14 +32,23 @@ interface RadioGroupItemProps {
 }
 
 export const RadioGroupItem: React.FC<RadioGroupItemProps> = ({ value, id, className, _groupValue, _onGroupChange }) => {
+  const isSelected = _groupValue === value;
+  
   return (
-    <input
-      type="radio"
-      id={id}
-      value={value}
-      checked={_groupValue === value}
-      onChange={() => _onGroupChange && _onGroupChange(value)}
-      className={`h-4 w-4 accent-primary cursor-pointer ${className || ''}`}
-    />
+    <div className="relative flex items-center justify-center pointer-events-none">
+      <div 
+        className={`
+          h-5 w-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center
+          ${isSelected 
+            ? 'border-black bg-white' 
+            : 'border-slate-300 bg-white'}
+          ${className || ''}
+        `}
+      >
+        {isSelected && (
+          <div className="h-2.5 w-2.5 rounded-full bg-black scale-100 transition-transform" />
+        )}
+      </div>
+    </div>
   );
 };

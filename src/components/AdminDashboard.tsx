@@ -37,6 +37,8 @@ export const AdminDashboard = () => {
   const [evaluationFrequency, setEvaluationFrequency] = useState('90');
   const [selectedUserForDetails, setSelectedUserForDetails] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedEvalForDetail, setSelectedEvalForDetail] = useState<any>(null);
+  const [isEvalDetailOpen, setIsEvalDetailOpen] = useState(false);
   const [isTriggerCycleOpen, setIsTriggerCycleOpen] = useState(false);
   const [isFormBuilderOpen, setIsFormBuilderOpen] = useState(false);
   const [forms, setForms] = useState<Form[]>([]);
@@ -388,11 +390,37 @@ export const AdminDashboard = () => {
   const completedEvals = evaluations.filter(e => e.status === 'completed').length;
   const progress = totalEvals > 0 ? (completedEvals / totalEvals) * 100 : 0;
 
+  const getEvaluationScore = (evaluation: any) => {
+    if (evaluation.rating) return evaluation.rating;
+    if (!evaluation.answers) return 0;
+    
+    const mapping: Record<string, number> = {
+      'Nunca': 1,
+      'Algumas Vezes': 3,
+      'Sempre': 5
+    };
+
+    let totalPoints = 0;
+    let count = 0;
+
+    Object.values(evaluation.answers).forEach((ans: any) => {
+      if (typeof ans === 'string' && mapping[ans] !== undefined) {
+        totalPoints += mapping[ans];
+        count++;
+      } else if (typeof ans === 'number') {
+        totalPoints += ans;
+        count++;
+      }
+    });
+
+    return count > 0 ? totalPoints / count : 0;
+  };
+
   // Chart Data: Average Rating per User
   const chartData = users.map(user => {
     const userEvals = evaluations.filter(e => e.evaluated_id === user.uid && e.status === 'completed');
     const avg = userEvals.length > 0 
-      ? userEvals.reduce((acc, curr) => acc + (curr.rating || 0), 0) / userEvals.length 
+      ? userEvals.reduce((acc, curr) => acc + getEvaluationScore(curr), 0) / userEvals.length 
       : 0;
     return {
       name: user.name,
@@ -423,9 +451,9 @@ export const AdminDashboard = () => {
   // Dynamic Average for filtered set
   const filteredAverage = useMemo(() => {
     if (!filteredEvaluations) return 0;
-    const completed = filteredEvaluations.filter(e => e.status === 'completed' && e.rating);
+    const completed = filteredEvaluations.filter(e => e.status === 'completed');
     if (completed.length === 0) return 0;
-    const sum = completed.reduce((acc, curr) => acc + (curr.rating || 0), 0);
+    const sum = completed.reduce((acc, curr) => acc + getEvaluationScore(curr), 0);
     return parseFloat((sum / completed.length).toFixed(2));
   }, [filteredEvaluations]);
 
@@ -905,6 +933,7 @@ export const AdminDashboard = () => {
                   <TableHead className="font-bold">Colaborador Avaliado</TableHead>
                   <TableHead className="w-[100px] font-bold">Nota</TableHead>
                   <TableHead className="font-bold">Comentário</TableHead>
+                  <TableHead className="w-[80px] text-right font-bold">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -941,6 +970,20 @@ export const AdminDashboard = () => {
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-sm italic text-slate-500" title={evalItem.comment}>
                         {evalItem.comment || (evalItem.status === 'completed' ? 'Sem comentário' : '-')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {evalItem.status === 'completed' && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon-sm"
+                            onClick={() => {
+                              setSelectedEvalForDetail(evalItem);
+                              setIsEvalDetailOpen(true);
+                            }}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1135,14 +1178,24 @@ export const AdminDashboard = () => {
                   .filter(e => e.evaluated_id === selectedUserForDetails?.uid && e.status === 'completed')
                   .sort((a,b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())
                   .map(e => (
-                    <div key={e.id} className="p-3 bg-white border rounded-lg space-y-2">
+                    <div 
+                      key={e.id} 
+                      className="p-3 bg-white border rounded-lg space-y-2 cursor-pointer hover:border-primary hover:shadow-sm transition-all group"
+                      onClick={() => {
+                        setSelectedEvalForDetail(e);
+                        setIsEvalDetailOpen(true);
+                      }}
+                    >
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-1">
                           {[1,2,3,4,5].map(i => (
                             <Star key={i} className={`h-3 w-3 ${i <= (e.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />
                           ))}
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{new Date(e.completed_at).toLocaleDateString('pt-BR')}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground">{new Date(e.completed_at).toLocaleDateString('pt-BR')}</span>
+                          <ExternalLink className="h-3 w-3 text-slate-300 group-hover:text-primary transition-colors" />
+                        </div>
                       </div>
                       <p className="text-sm italic text-slate-600">"{e.comment}"</p>
                     </div>
@@ -1216,6 +1269,143 @@ export const AdminDashboard = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Evaluation Detail Dialog */}
+      <Dialog open={isEvalDetailOpen} onOpenChange={setIsEvalDetailOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-primary" /> Detalhamento da Avaliação
+            </DialogTitle>
+            <DialogDescription>
+              Respostas detalhadas, somatório e média de desempenho.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedEvalForDetail && (
+            <div className="space-y-6 py-4">
+              {/* Info Header */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Avaliador</p>
+                  <p className="text-sm font-semibold">{selectedEvalForDetail.evaluator_name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Avaliado</p>
+                  <p className="text-sm font-semibold">{selectedEvalForDetail.evaluated_name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Data</p>
+                  <p className="text-sm font-semibold">{new Date(selectedEvalForDetail.completed_at || selectedEvalForDetail.created_at).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Média Final</p>
+                  <div className="flex items-center justify-end gap-1">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    <span className="text-lg font-black text-primary">{getEvaluationScore(selectedEvalForDetail).toFixed(1)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Answers Breakdown */}
+              <div className="space-y-8">
+                {(() => {
+                  const evalQuestions = questionsMap[selectedEvalForDetail.form_id || ''] || [];
+                  const answers = selectedEvalForDetail.answers || {};
+                  
+                  // Group questions by category (consistent with DynamicFormRenderer)
+                  const grouped: Record<string, any[]> = {};
+                  evalQuestions.forEach(q => {
+                    let cat = q.category || 'Geral';
+                    if (!q.category && q.question_text.includes(': ')) {
+                      const p = q.question_text.split(': ');
+                      if (p[0].length < 40) cat = p[0];
+                    }
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(q);
+                  });
+
+                  const mapping: Record<string, number> = { 'Nunca': 1, 'Algumas Vezes': 3, 'Sempre': 5 };
+                  let totalSum = 0;
+                  let validCount = 0;
+
+                  return (
+                    <>
+                      {Object.entries(grouped).map(([category, qs]) => (
+                        <div key={category} className="space-y-3">
+                          <h3 className="text-sm font-bold text-primary flex items-center gap-2 border-b pb-2">
+                            <div className="w-1 h-4 bg-primary rounded-full" />
+                            {category}
+                          </h3>
+                          <div className="space-y-3">
+                            {qs.map((q, idx) => {
+                              const ans = answers[q.id || ''];
+                              const score = typeof ans === 'string' ? mapping[ans] : (typeof ans === 'number' ? ans : null);
+                              if (score !== null) {
+                                totalSum += score;
+                                validCount++;
+                              }
+
+                              // Clean question text if it has prefix
+                              let displayPrompt = q.question_text;
+                              if (displayPrompt.includes(': ')) {
+                                const p = displayPrompt.split(': ');
+                                if (p[0].length < 40) displayPrompt = p.slice(1).join(': ');
+                              }
+
+                              return (
+                                <div key={q.id || idx} className="flex justify-between items-start gap-4 p-3 bg-white rounded-lg border border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                  <div className="space-y-1 flex-1">
+                                    <p className="text-sm font-medium text-slate-700">{displayPrompt}</p>
+                                    <p className="text-xs text-muted-foreground">Resposta: <span className="text-primary font-semibold">{ans ||'-'}</span></p>
+                                  </div>
+                                  {score !== null && (
+                                    <Badge variant="outline" className="bg-slate-50 font-bold border-slate-200">
+                                      {score} pts
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Totals Summary */}
+                      <div className="pt-6 border-t mt-8">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-slate-900 text-white p-4 rounded-xl shadow-lg border-2 border-primary/20">
+                            <p className="text-[10px] uppercase font-bold opacity-70 mb-1">Somatório de Notas</p>
+                            <p className="text-3xl font-black">{totalSum} <span className="text-sm font-normal opacity-50">pontos</span></p>
+                          </div>
+                          <div className="bg-primary text-white p-4 rounded-xl shadow-lg">
+                            <p className="text-[10px] uppercase font-bold opacity-70 mb-1">Média da Avaliação</p>
+                            <p className="text-3xl font-black">
+                              {validCount > 0 ? (totalSum / validCount).toFixed(2) : '0.00'} 
+                              <span className="text-sm font-normal opacity-50 ml-2">/ 5.0</span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comment Section */}
+                      {selectedEvalForDetail.comment && (
+                        <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                          <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">Comentário Adicional</p>
+                          <p className="text-sm italic text-amber-900 leading-relaxed">"{selectedEvalForDetail.comment}"</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button onClick={() => setIsEvalDetailOpen(false)}>Fechar Detalhes</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
