@@ -3,9 +3,10 @@ import { supabase } from '../supabase';
 import { useEvaluations } from '../hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Star, ClipboardCheck, Clock, Send, UserCircle, AlertCircle } from 'lucide-react';
+import { Star, ClipboardCheck, Clock, Send, UserCircle, AlertCircle, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,7 +45,7 @@ export const EmployeeDashboard = () => {
           accessKey: parsed.access_key || parsed.accessKey,
           evaluationId: selectedEval.id,
           rating: isCustomForm ? null : rating,
-          comment: isCustomForm ? null : comment,
+          comment: comment,
           answers: isCustomForm ? answers : null
         })
       });
@@ -166,6 +167,22 @@ export const EmployeeDashboard = () => {
                       setIsFormComplete(complete);
                     }} 
                   />
+
+                  <div className="space-y-3 pt-4 border-t border-slate-100">
+                    <Label htmlFor="opinion" className="text-sm font-bold flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" /> Opinião Consultiva / Considerações Finais
+                    </Label>
+                    <Textarea 
+                      id="opinion"
+                      placeholder="Espaço livre para sua opinião construtiva sobre o desempenho geral do colega..."
+                      className="min-h-[120px] bg-slate-50/50 border-slate-200 focus:bg-white transition-colors p-4 resize-none"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Sua opinião é fundamental para o desenvolvimento do colaborador. Seja específico e profissional.
+                    </p>
+                  </div>
                   
                   <div className="flex justify-end pt-4">
                     <Button 
