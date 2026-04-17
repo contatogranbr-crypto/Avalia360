@@ -563,31 +563,31 @@ export const AdminDashboard = () => {
 
         // 1. Header
         doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
-        doc.rect(0, 0, pageWidth, 40, 'F');
+        doc.rect(0, 0, pageWidth, 35, 'F');
         
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
+        doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text('Avalia360', 15, 20);
+        doc.text('Avalia360', 15, 18);
         
-        doc.setFontSize(14);
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
-        doc.text('Relatório de Avaliação Individual', 15, 30);
+        doc.text('Relatório de Avaliação Individual', 15, 26);
 
         // 2. Info Section
         doc.setTextColor(50, 50, 50);
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.text('INFORMAÇÕES GERAIS', 15, 55);
+        doc.text('INFORMAÇÕES GERAIS', 15, 50);
         
         doc.setDrawColor(200, 200, 200);
-        doc.line(15, 58, pageWidth - 15, 58);
+        doc.line(15, 53, pageWidth - 15, 53);
 
         const statusLabel = e.status === 'completed' ? 'Concluído' : 'Pendente';
         const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
 
         autoTable(doc, {
-          startY: 62,
+          startY: 57,
           head: [],
           body: [
             ['Avaliado:', e.evaluated_name || '-'],
@@ -597,14 +597,15 @@ export const AdminDashboard = () => {
             ['Nota Média:', e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-']
           ],
           theme: 'plain',
-          styles: { fontSize: 10, cellPadding: 2 },
+          styles: { fontSize: 8.5, cellPadding: 1.5 },
           columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 } }
         });
 
         // 3. Comments & Answers Section
         doc.setFont('helvetica', 'bold');
-        doc.text('COMENTÁRIOS E RESPOSTAS', 15, (doc as any).lastAutoTable.finalY + 15);
-        doc.line(15, (doc as any).lastAutoTable.finalY + 18, pageWidth - 15, (doc as any).lastAutoTable.finalY + 18);
+        doc.setFontSize(9);
+        doc.text('COMENTÁRIOS E RESPOSTAS', 15, (doc as any).lastAutoTable.finalY + 12);
+        doc.line(15, (doc as any).lastAutoTable.finalY + 15, pageWidth - 15, (doc as any).lastAutoTable.finalY + 15);
 
         let details = [];
         if (e.comment) {
@@ -622,13 +623,14 @@ export const AdminDashboard = () => {
 
         if (details.length === 0) {
           doc.setFont('helvetica', 'italic');
-          doc.text('Nenhuma resposta detalhada disponível.', 15, (doc as any).lastAutoTable.finalY + 25);
+          doc.setFontSize(8.5);
+          doc.text('Nenhuma resposta detalhada disponível.', 15, (doc as any).lastAutoTable.finalY + 22);
         } else {
           autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY + 22,
+            startY: (doc as any).lastAutoTable.finalY + 18,
             body: details,
             theme: 'grid',
-            styles: { fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
+            styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
             columnStyles: { 
               0: { fontStyle: 'bold', cellWidth: 60, fillColor: [248, 250, 252] },
               1: { cellWidth: 'auto' }
