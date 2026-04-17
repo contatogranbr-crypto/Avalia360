@@ -210,18 +210,24 @@ export const EmployeeDashboard = () => {
 
                   <div className="space-y-3 pt-4 border-t border-slate-100">
                     <Label htmlFor="opinion" className="text-sm font-bold flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-primary" /> Opinião Consultiva / Considerações Finais
+                      <FileText className="h-4 w-4 text-primary" /> 
+                      {selectedEval.evaluated_id === 'activity_mapping' ? 'Considerações Finais sobre o Mapeamento' : 'Opinião Consultiva / Considerações Finais'}
                     </Label>
                     <Textarea 
                       id="opinion"
-                      placeholder="Espaço livre para sua opinião construtiva sobre o desempenho geral do colega..."
+                      placeholder={selectedEval.evaluated_id === 'activity_mapping' 
+                        ? "Descreva aqui eventuais observações sobre suas atividades ou rotina..."
+                        : "Espaço livre para sua opinião construtiva sobre o desempenho geral do colega..."
+                      }
                       className="min-h-[120px] bg-slate-50/50 border-slate-200 focus:bg-white transition-colors p-4 resize-none"
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                     />
-                    <p className="text-[10px] text-muted-foreground italic">
-                      Sua opinião é fundamental para o desenvolvimento do colaborador. Seja específico e profissional.
-                    </p>
+                    {selectedEval.evaluated_id !== 'activity_mapping' && (
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Sua opinião é fundamental para o desenvolvimento do colaborador. Seja específico e profissional.
+                      </p>
+                    )}
                   </div>
                   
                   <div className="flex justify-end pt-4">
@@ -231,7 +237,7 @@ export const EmployeeDashboard = () => {
                       onClick={handleSubmit}
                     >
                       <Send className="mr-2 h-4 w-4" /> 
-                      {submitting ? 'Enviando...' : 'Finalizar Avaliação'}
+                      {submitting ? 'Enviando...' : (selectedEval.evaluated_id === 'activity_mapping' ? 'Finalizar Mapeamento' : 'Finalizar Avaliação')}
                     </Button>
                   </div>
                 </div>
