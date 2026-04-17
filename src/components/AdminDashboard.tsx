@@ -558,37 +558,53 @@ export const AdminDashboard = () => {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
 
-      filteredEvaluations.forEach((e, index) => {
-        if (index > 0) doc.addPage();
+      let currentY = 0;
 
-        // 1. Header
-        doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
-        doc.rect(0, 0, pageWidth, 18, 'F');
-        
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Avalia360', 12, 10);
-        
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Relatório de Avaliação Individual', 12, 15);
+      filteredEvaluations.forEach((e, index) => {
+        // Check if we need a new page (if space is less than 60 units)
+        const spaceNeeded = 60;
+        if (index > 0 && currentY + spaceNeeded > 280) {
+          doc.addPage();
+          currentY = 0;
+        }
+
+        // 1. Header / Separator
+        if (index === 0 || currentY === 0) {
+          doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
+          doc.rect(0, currentY, pageWidth, 18, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Avalia360', 12, currentY + 10);
+          
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Relatório de Avaliações', 12, currentY + 15);
+          currentY += 25;
+        } else {
+          // Compact separator for subsequent evaluations on the same page
+          doc.setDrawColor(37, 99, 235);
+          doc.setLineWidth(0.5);
+          doc.line(12, currentY + 5, pageWidth - 12, currentY + 5);
+          currentY += 12;
+        }
 
         // 2. Info Section (Two Columns)
         doc.setTextColor(50, 50, 50);
         doc.setFontSize(8.5);
         doc.setFont('helvetica', 'bold');
-        doc.text('INFORMAÇÕES GERAIS', 12, 28);
+        doc.text(`AVALIAÇÃO #${index + 1}: ${e.evaluated_name}`, 12, currentY);
         
         doc.setDrawColor(220, 220, 220);
-        doc.line(12, 30, pageWidth - 12, 30);
+        doc.line(12, currentY + 2, pageWidth - 12, currentY + 2);
 
         const statusLabel = e.status === 'completed' ? 'Concluído' : 'Pendente';
         const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
         const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
 
         autoTable(doc, {
-          startY: 33,
+          startY: currentY + 5,
           head: [],
           body: [
             ['Avaliado:', e.evaluated_name || '-', 'Data:', dateStr],
@@ -605,12 +621,9 @@ export const AdminDashboard = () => {
           }
         });
 
-        // 3. Comments & Answers Section
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.text('COMENTÁRIOS E RESPOSTAS', 12, (doc as any).lastAutoTable.finalY + 8);
-        doc.line(12, (doc as any).lastAutoTable.finalY + 10, pageWidth - 12, (doc as any).lastAutoTable.finalY + 10);
+        currentY = (doc as any).lastAutoTable.finalY + 8;
 
+        // 3. Comments & Answers Section
         let details = [];
         if (e.comment) {
           details.push(['Comentário Geral:', e.comment]);
@@ -625,13 +638,9 @@ export const AdminDashboard = () => {
           });
         }
 
-        if (details.length === 0) {
-          doc.setFont('helvetica', 'italic');
-          doc.setFontSize(7.5);
-          doc.text('Nenhuma resposta detalhada disponível.', 12, (doc as any).lastAutoTable.finalY + 15);
-        } else {
+        if (details.length > 0) {
           autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY + 13,
+            startY: currentY,
             body: details,
             theme: 'grid',
             styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
@@ -642,17 +651,26 @@ export const AdminDashboard = () => {
             headStyles: { fillColor: [37, 99, 235] },
             margin: { left: 12, right: 12 }
           });
+          currentY = (doc as any).lastAutoTable.finalY + 12;
+        } else {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(7.5);
+          doc.text('Nenhuma resposta detalhada disponível.', 12, currentY + 2);
+          currentY += 10;
         }
-
-        // 4. Footer
-        const finalY = (doc as any).lastAutoTable.finalY || (doc as any).internal.lastEmptyLineY || 200;
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Página ${index + 1} de ${filteredEvaluations.length}`, pageWidth / 2, 285, { align: 'center' });
-        doc.text('Gerado automaticamente pelo Sistema Avalia360', pageWidth / 2, 290, { align: 'center' });
       });
 
-      doc.save(`relatorios_avalia360_${new Date().toISOString().split('T')[0]}.pdf`);
+      // 4. Footer (on each page)
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, 285, { align: 'center' });
+        doc.text('Gerado automaticamente pelo Sistema Avalia360', pageWidth / 2, 290, { align: 'center' });
+      }
+
+      doc.save(`relatorio_log_avalia360_${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('PDF gerado com sucesso!');
     } catch (error) {
       console.error('PDF export error:', error);
