@@ -563,42 +563,46 @@ export const AdminDashboard = () => {
 
         // 1. Header
         doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
-        doc.rect(0, 0, pageWidth, 35, 'F');
+        doc.rect(0, 0, pageWidth, 25, 'F');
         
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
+        doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        doc.text('Avalia360', 15, 18);
+        doc.text('Avalia360', 15, 12);
         
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('Relatório de Avaliação Individual', 15, 26);
+        doc.text('Relatório de Avaliação Individual', 15, 19);
 
-        // 2. Info Section
+        // 2. Info Section (Two Columns)
         doc.setTextColor(50, 50, 50);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.text('INFORMAÇÕES GERAIS', 15, 50);
+        doc.text('INFORMAÇÕES GERAIS', 15, 40);
         
         doc.setDrawColor(200, 200, 200);
-        doc.line(15, 53, pageWidth - 15, 53);
+        doc.line(15, 43, pageWidth - 15, 43);
 
         const statusLabel = e.status === 'completed' ? 'Concluído' : 'Pendente';
         const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
+        const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
 
         autoTable(doc, {
-          startY: 57,
+          startY: 47,
           head: [],
           body: [
-            ['Avaliado:', e.evaluated_name || '-'],
-            ['Avaliador:', e.evaluator_name || '-'],
-            ['Data:', dateStr],
-            ['Status:', statusLabel],
-            ['Nota Média:', e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-']
+            ['Avaliado:', e.evaluated_name || '-', 'Data:', dateStr],
+            ['Avaliador:', e.evaluator_name || '-', 'Status:', statusLabel],
+            ['', '', 'Nota Média:', rating]
           ],
           theme: 'plain',
           styles: { fontSize: 8.5, cellPadding: 1.5 },
-          columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 } }
+          columnStyles: { 
+            0: { fontStyle: 'bold', cellWidth: 35 },
+            1: { cellWidth: 60 },
+            2: { fontStyle: 'bold', cellWidth: 35 },
+            3: { cellWidth: 'auto' }
+          }
         });
 
         // 3. Comments & Answers Section
