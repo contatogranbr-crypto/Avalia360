@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload, Download } from 'lucide-react';
+import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload, Download, FileDown } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { createEmployeeAccount, updateEmployeeProfile, deleteEmployeeAccount } from '../services';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -545,6 +547,111 @@ export const AdminDashboard = () => {
     const depts = new Set(users.map(u => u.department).filter(Boolean));
     return Array.from(depts);
   }, [users]);
+
+  const handleExportPDF = () => {
+    if (filteredEvaluations.length === 0) {
+      toast.error('Não há dados para exportar.');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      filteredEvaluations.forEach((e, index) => {
+        if (index > 0) doc.addPage();
+
+        // 1. Header
+        doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
+        doc.rect(0, 0, pageWidth, 40, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Avalia360', 15, 20);
+        
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório de Avaliação Individual', 15, 30);
+
+        // 2. Info Section
+        doc.setTextColor(50, 50, 50);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INFORMAÇÕES GERAIS', 15, 55);
+        
+        doc.setDrawColor(200, 200, 200);
+        doc.line(15, 58, pageWidth - 15, 58);
+
+        const statusLabel = e.status === 'completed' ? 'Concluído' : 'Pendente';
+        const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
+
+        autoTable(doc, {
+          startY: 62,
+          head: [],
+          body: [
+            ['Avaliado:', e.evaluated_name || '-'],
+            ['Avaliador:', e.evaluator_name || '-'],
+            ['Data:', dateStr],
+            ['Status:', statusLabel],
+            ['Nota Média:', e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-']
+          ],
+          theme: 'plain',
+          styles: { fontSize: 10, cellPadding: 2 },
+          columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 } }
+        });
+
+        // 3. Comments & Answers Section
+        doc.setFont('helvetica', 'bold');
+        doc.text('COMENTÁRIOS E RESPOSTAS', 15, (doc as any).lastAutoTable.finalY + 15);
+        doc.line(15, (doc as any).lastAutoTable.finalY + 18, pageWidth - 15, (doc as any).lastAutoTable.finalY + 18);
+
+        let details = [];
+        if (e.comment) {
+          details.push(['Comentário Geral:', e.comment]);
+        }
+
+        if (e.answers && Object.keys(e.answers).length > 0) {
+          const questions = questionsMap[e.form_id || ''] || [];
+          Object.entries(e.answers).forEach(([qId, ans]: [string, any]) => {
+            const q = questions.find((quest: any) => quest.id === qId);
+            const qText = q ? q.question_text : `Questão ${qId}`;
+            details.push([qText, ans]);
+          });
+        }
+
+        if (details.length === 0) {
+          doc.setFont('helvetica', 'italic');
+          doc.text('Nenhuma resposta detalhada disponível.', 15, (doc as any).lastAutoTable.finalY + 25);
+        } else {
+          autoTable(doc, {
+            startY: (doc as any).lastAutoTable.finalY + 22,
+            body: details,
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
+            columnStyles: { 
+              0: { fontStyle: 'bold', cellWidth: 60, fillColor: [248, 250, 252] },
+              1: { cellWidth: 'auto' }
+            },
+            headStyles: { fillColor: [37, 99, 235] }
+          });
+        }
+
+        // 4. Footer
+        const finalY = (doc as any).lastAutoTable.finalY || (doc as any).internal.lastEmptyLineY || 200;
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Página ${index + 1} de ${filteredEvaluations.length}`, pageWidth / 2, 285, { align: 'center' });
+        doc.text('Gerado automaticamente pelo Sistema Avalia360', pageWidth / 2, 290, { align: 'center' });
+      });
+
+      doc.save(`relatorios_avalia360_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      toast.error('Erro ao gerar PDF.');
+    }
+  };
 
   const handleExportExcel = () => {
     if (filteredEvaluations.length === 0) {
@@ -1092,6 +1199,15 @@ export const AdminDashboard = () => {
                   title="Exportar Excel"
                 >
                   <Download className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="h-9 w-9 border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shrink-0"
+                  onClick={handleExportPDF}
+                  title="Exportar PDF (Relatórios Individuais)"
+                >
+                  <FileDown className="h-4 w-4" />
                 </Button>
               </div>
             </div>
