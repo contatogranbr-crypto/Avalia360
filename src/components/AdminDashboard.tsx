@@ -563,53 +563,53 @@ export const AdminDashboard = () => {
 
         // 1. Header
         doc.setFillColor(37, 99, 235); // Blue-600 (Primary)
-        doc.rect(0, 0, pageWidth, 25, 'F');
+        doc.rect(0, 0, pageWidth, 18, 'F');
         
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text('Avalia360', 15, 12);
+        doc.text('Avalia360', 12, 10);
         
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text('Relatório de Avaliação Individual', 15, 19);
+        doc.text('Relatório de Avaliação Individual', 12, 15);
 
         // 2. Info Section (Two Columns)
         doc.setTextColor(50, 50, 50);
-        doc.setFontSize(9);
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'bold');
-        doc.text('INFORMAÇÕES GERAIS', 15, 40);
+        doc.text('INFORMAÇÕES GERAIS', 12, 28);
         
-        doc.setDrawColor(200, 200, 200);
-        doc.line(15, 43, pageWidth - 15, 43);
+        doc.setDrawColor(220, 220, 220);
+        doc.line(12, 30, pageWidth - 12, 30);
 
         const statusLabel = e.status === 'completed' ? 'Concluído' : 'Pendente';
         const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
         const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
 
         autoTable(doc, {
-          startY: 47,
+          startY: 33,
           head: [],
           body: [
             ['Avaliado:', e.evaluated_name || '-', 'Data:', dateStr],
             ['Avaliador:', e.evaluator_name || '-', 'Status:', statusLabel],
-            ['', '', 'Nota Média:', rating]
+            ['', '', 'Nota:', rating]
           ],
           theme: 'plain',
-          styles: { fontSize: 8.5, cellPadding: 1.5 },
+          styles: { fontSize: 7.5, cellPadding: 1 },
           columnStyles: { 
-            0: { fontStyle: 'bold', cellWidth: 35 },
+            0: { fontStyle: 'bold', cellWidth: 25 },
             1: { cellWidth: 60 },
-            2: { fontStyle: 'bold', cellWidth: 35 },
+            2: { fontStyle: 'bold', cellWidth: 20 },
             3: { cellWidth: 'auto' }
           }
         });
 
         // 3. Comments & Answers Section
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text('COMENTÁRIOS E RESPOSTAS', 15, (doc as any).lastAutoTable.finalY + 12);
-        doc.line(15, (doc as any).lastAutoTable.finalY + 15, pageWidth - 15, (doc as any).lastAutoTable.finalY + 15);
+        doc.setFontSize(8.5);
+        doc.text('COMENTÁRIOS E RESPOSTAS', 12, (doc as any).lastAutoTable.finalY + 8);
+        doc.line(12, (doc as any).lastAutoTable.finalY + 10, pageWidth - 12, (doc as any).lastAutoTable.finalY + 10);
 
         let details = [];
         if (e.comment) {
@@ -620,26 +620,27 @@ export const AdminDashboard = () => {
           const questions = questionsMap[e.form_id || ''] || [];
           Object.entries(e.answers).forEach(([qId, ans]: [string, any]) => {
             const q = questions.find((quest: any) => quest.id === qId);
-            const qText = q ? q.question_text : `Questão ${qId}`;
+            const qText = q ? q.question_text.replace(/\n/g, ' ') : `Questão ${qId}`;
             details.push([qText, ans]);
           });
         }
 
         if (details.length === 0) {
           doc.setFont('helvetica', 'italic');
-          doc.setFontSize(8.5);
-          doc.text('Nenhuma resposta detalhada disponível.', 15, (doc as any).lastAutoTable.finalY + 22);
+          doc.setFontSize(7.5);
+          doc.text('Nenhuma resposta detalhada disponível.', 12, (doc as any).lastAutoTable.finalY + 15);
         } else {
           autoTable(doc, {
-            startY: (doc as any).lastAutoTable.finalY + 18,
+            startY: (doc as any).lastAutoTable.finalY + 13,
             body: details,
             theme: 'grid',
-            styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
+            styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
             columnStyles: { 
-              0: { fontStyle: 'bold', cellWidth: 60, fillColor: [248, 250, 252] },
+              0: { fontStyle: 'bold', cellWidth: 45, fillColor: [250, 250, 250] },
               1: { cellWidth: 'auto' }
             },
-            headStyles: { fillColor: [37, 99, 235] }
+            headStyles: { fillColor: [37, 99, 235] },
+            margin: { left: 12, right: 12 }
           });
         }
 
