@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload } from 'lucide-react';
+import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload, Download } from 'lucide-react';
 import { createEmployeeAccount, updateEmployeeProfile, deleteEmployeeAccount } from '../services';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -252,6 +252,33 @@ export const AdminDashboard = () => {
     } catch (error: any) {
       toast.error('Erro ao iniciar ciclo: ' + error.message);
       throw error;
+    }
+  };
+
+  const handleTriggerActivitiesMapping = async () => {
+    const savedUser = localStorage.getItem('auth_fallback_user');
+    if (!savedUser) return;
+    const parsed = JSON.parse(savedUser);
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/admin/trigger-activities-mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(data.message);
+        fetchData();
+      } else throw new Error(data.error);
+    } catch (error: any) {
+      toast.error('Erro ao enviar mapeamento: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -519,6 +546,92 @@ export const AdminDashboard = () => {
     return Array.from(depts);
   }, [users]);
 
+  const handleExportExcel = () => {
+    if (filteredEvaluations.length === 0) {
+      toast.error('Não há dados para exportar.');
+      return;
+    }
+
+    try {
+      const headers = ['Status', 'Data', 'Avaliador', 'Colaborador Avaliado', 'Nota', 'Comentário / Respostas'];
+      
+      const rows = filteredEvaluations.map(e => {
+        const status = e.status === 'completed' ? 'Concluído' : 'Pendente';
+        const date = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
+        const evaluator = e.evaluator_name || '-';
+        const evaluated = e.evaluated_name || '-';
+        const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
+        
+        // Handle comment or answers for custom forms
+        let commentOrAnswers = e.comment || '';
+        if (!commentOrAnswers && e.answers && Object.keys(e.answers).length > 0) {
+          commentOrAnswers = Object.entries(e.answers)
+            .map(([qId, ans]) => {
+              const questions = questionsMap[e.form_id || ''] || [];
+              const q = questions.find((quest: any) => quest.id === qId);
+              const qText = q ? q.question_text.split('\n')[0] : qId;
+              return `<strong>${qText}:</strong> ${ans}`;
+            })
+            .join('<br>');
+        }
+        
+        if (!commentOrAnswers && e.status === 'completed') commentOrAnswers = 'Sem comentário';
+        if (!commentOrAnswers) commentOrAnswers = '-';
+
+        return `
+          <tr>
+            <td style="color: ${e.status === 'completed' ? '#16a34a' : '#d97706'}; font-weight: bold;">${status}</td>
+            <td>${date}</td>
+            <td>${evaluator}</td>
+            <td>${evaluated}</td>
+            <td style="text-align: center;">${rating}</td>
+            <td>${commentOrAnswers}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const htmlContent = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="UTF-8">
+          <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Avaliações</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+          <style>
+            table { border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1; }
+            th { background-color: #f1f5f9; color: #475569; font-weight: bold; border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+            td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; font-family: sans-serif; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <table>
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${h}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `avaliacoes_avalia360_${new Date().toISOString().split('T')[0]}.xls`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Excel gerado e formatado com sucesso!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Erro ao exportar dados.');
+    }
+  };
+
   if (isFormBuilderOpen) {
     return (
       <div className="p-6 bg-slate-100 min-h-screen">
@@ -549,6 +662,15 @@ export const AdminDashboard = () => {
           </Button>
           <Button variant="outline" size="lg" onClick={() => setIsSettingsOpen(true)} className="gap-2">
             <Settings className="h-5 w-5" /> Configurações
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
+            onClick={handleTriggerActivitiesMapping} 
+            disabled={loading}
+            className="gap-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+          >
+            <FileText className="h-5 w-5" /> Mapeamento
           </Button>
           <Button variant="secondary" size="lg" onClick={() => setIsTriggerCycleOpen(true)} className="gap-2 bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">
             <RefreshCw className="h-5 w-5" /> Novo Ciclo
@@ -950,25 +1072,40 @@ export const AdminDashboard = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-            <div className="space-y-1.5">
+          <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
                 <Search className="h-3 w-3" /> Busca
               </Label>
-              <Input 
-                placeholder="Nome ou comentário..." 
-                className="h-9 bg-white"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Nome ou comentário..." 
+                  className="h-9 bg-white"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="h-9 w-9 border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shrink-0"
+                  onClick={handleExportExcel}
+                  title="Exportar Excel"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="w-44 space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
                 <Filter className="h-3 w-3" /> Status
               </Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue>
+                    {statusFilter === 'all' ? 'Todos' : 
+                     statusFilter === 'pending' ? 'Pendentes' : 'Concluídos'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -977,11 +1114,14 @@ export const AdminDashboard = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="w-56 space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase">Avaliador</Label>
               <Select value={evaluatorFilter} onValueChange={setEvaluatorFilter}>
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Selecione" />
+                  <SelectValue>
+                    {evaluatorFilter === 'all' ? 'Todos' : (users.find(u => u.uid === evaluatorFilter)?.name || 'Todos')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -991,11 +1131,14 @@ export const AdminDashboard = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="w-56 space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase">Avaliado</Label>
               <Select value={evaluatedFilter} onValueChange={setEvaluatedFilter}>
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Selecione" />
+                  <SelectValue>
+                    {evaluatedFilter === 'all' ? 'Todos' : (users.find(u => u.uid === evaluatedFilter)?.name || 'Todos')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -1005,11 +1148,14 @@ export const AdminDashboard = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="w-44 space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase">Setor</Label>
               <Select value={deptFilter} onValueChange={setDeptFilter}>
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue>
+                    {deptFilter === 'all' ? 'Todos os setores' : deptFilter}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os setores</SelectItem>

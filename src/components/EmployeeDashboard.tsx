@@ -128,26 +128,34 @@ export const EmployeeDashboard = () => {
                 <CardContent className="p-4 flex flex-col space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <Avatar className="h-10 w-10 border">
-                        <AvatarImage src={e.evaluated_photo_url} />
-                        <AvatarFallback className="text-[10px] font-bold">
-                          {e.evaluated_name?.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      {e.evaluated_id === 'activity_mapping' || e.evaluated_id === 'organizational' ? (
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <FileText className="h-6 w-6" />
+                        </div>
+                      ) : (
+                        <Avatar className="h-10 w-10 border">
+                          <AvatarImage src={e.evaluated_photo_url} />
+                          <AvatarFallback className="text-[10px] font-bold">
+                            {e.evaluated_name?.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <span className="font-bold text-lg">{e.evaluated_name}</span>
                     </div>
                     <Button variant="outline" size="sm" className="h-8">Avaliar</Button>
                   </div>
-                  <div className="flex flex-wrap gap-2 pl-11">
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100 font-normal">
-                      {e.evaluated_role === 'admin' ? 'Administrador' : 'Colaborador'}
-                    </Badge>
-                    {e.evaluated_department && (
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 font-normal">
-                        {e.evaluated_department}
+                  {e.evaluated_id !== 'activity_mapping' && e.evaluated_id !== 'organizational' && (
+                    <div className="flex flex-wrap gap-2 pl-11">
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100 font-normal">
+                        {e.evaluated_role === 'admin' ? 'Administrador' : 'Colaborador'}
                       </Badge>
-                    )}
-                  </div>
+                      {e.evaluated_department && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 font-normal">
+                          {e.evaluated_department}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))
@@ -179,7 +187,10 @@ export const EmployeeDashboard = () => {
             <div className="space-y-6">
               <Card className="border-t-4 border-t-primary shadow-lg">
                 <CardHeader>
-                  <CardTitle>Avaliando: {selectedEval.evaluated_name}</CardTitle>
+                  <CardTitle>
+                    {selectedEval.evaluated_id === 'activity_mapping' ? 'Preenchendo: ' : 'Avaliando: '}
+                    {selectedEval.evaluated_name}
+                  </CardTitle>
                   <CardDescription>
                     {currentForm ? currentForm.description || "Preencha o formulário personalizado abaixo." : "Sua avaliação é anônima. Seja honesto e construtivo."}
                   </CardDescription>

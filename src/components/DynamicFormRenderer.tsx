@@ -85,8 +85,7 @@ export const DynamicFormRenderer: React.FC<DynamicFormRendererProps> = ({ questi
             )}
             
             <div className="space-y-3 bg-white p-6 border rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <Label className="text-base font-semibold flex gap-1">
-                <span className="text-muted-foreground/60">{index + 1}.</span> 
+              <Label className="text-base font-semibold flex gap-1 whitespace-pre-line">
                 <span>{questionText}</span>
                 {q.required && <span className="text-red-500">*</span>}
               </Label>

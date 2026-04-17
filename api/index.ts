@@ -11,6 +11,8 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl as string, supabaseServiceKey as string)
   : null;
 
+const ACTIVITIES_FORM_ID = '36000000-0000-0000-0000-000000000003';
+
 if (!supabaseAdmin) {
   console.warn('[API] WARNING: Supabase Admin client not initialized. Check your environment variables.');
 }
@@ -653,6 +655,8 @@ router.use((req, res, next) => {
           return res.status(403).json({ error: 'Unauthorized' });
         }
       }
+      
+      const ACTIVITIES_FORM_ID = '36000000-0000-0000-0000-000000000003';
 
       // 1. Create the Main 360 Form (Competencies)
       const MAIN_FORM_ID = '36000000-0000-0000-0000-000000000001';
@@ -750,6 +754,199 @@ router.use((req, res, next) => {
     }
   });
 
+  // API Route to initialize the Activities Mapping form specifically
+  router.post('/admin/setup-activities-form', async (req, res) => {
+    const { adminEmail, adminAccessKey } = req.body;
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // 1. Verify Admin
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      const ACTIVITIES_FORM_ID = '36000000-0000-0000-0000-000000000003';
+      
+      const { error: formError } = await supabaseAdmin.from('forms').upsert({
+        id: ACTIVITIES_FORM_ID,
+        title: 'Mapeamento de Atividades',
+        description: 'Descreva suas rotinas e responsabilidades diárias, semanais e mensais.'
+      }, { onConflict: 'id' });
+
+      if (formError) throw formError;
+
+      const activitiesQuestions = [
+        { 
+          text: '1 Descreva suas atividades diárias\n\nInforme as atividades realizadas no dia.\nInclua:\n• O que foi feito\n• Ordem das atividades (sequência)\n• Se dependeu de alguém\n• Se houve dificuldade ou atraso',
+          type: 'paragraph',
+          req: true
+        },
+        { 
+          text: '2 Descreva suas atividades semanais\n\nInforme atividades que ocorrem ao longo da semana (não necessariamente todos os dias).\nInclua:\n• O que foi feito\n• Frequência ou momento da semana\n• Dependência de terceiros\n• Dificuldades encontradas',
+          type: 'paragraph',
+          req: true
+        },
+        { 
+          text: '3 Descreva suas atividades mensais\n\nInforme atividades relacionadas a fechamento, análises ou rotinas mensais.\nInclua:\n• O que foi feito\n• Em que momento do mês ocorre\n• Dependência de terceiros\n• Problemas ou atrasos',
+          type: 'paragraph',
+          req: true
+        },
+        { 
+          text: '4 Dificuldades ou pendências gerais\n\nInforme problemas, atrasos ou atividades não concluídas.',
+          type: 'paragraph',
+          req: true
+        },
+        { 
+          text: '6. Observações ou sugestões',
+          type: 'paragraph',
+          req: false
+        }
+      ];
+
+      await ensureActivitiesForm();
+      res.json({ success: true, message: 'Formulário de Mapeamento de Atividades inicializado com sucesso.' });
+    } catch (error: any) {
+      console.error('Error in setup-activities-form API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Helper to ensure Activities Form exists
+  async function ensureActivitiesForm() {
+    if (!supabaseAdmin) throw new Error('Supabase Admin not initialized');
+    
+    console.log('[API] Ensuring Activities Form exists:', ACTIVITIES_FORM_ID);
+    
+    // 1. Upsert Form
+    const { error: formError } = await supabaseAdmin.from('forms').upsert({
+      id: ACTIVITIES_FORM_ID,
+      title: 'Mapeamento de Atividades',
+      description: 'Descreva suas rotinas e responsabilidades diárias, semanais e mensais.'
+    }, { onConflict: 'id' });
+
+    if (formError) {
+      console.error('[API] Error upserting activities form:', formError);
+      throw formError;
+    }
+
+    // 2. Ensure Questions
+    const activitiesQuestions = [
+      { 
+        text: '1 Descreva suas atividades diárias\n\nInforme as atividades realizadas no dia.\nInclua:\n• O que foi feito\n• Ordem das atividades (sequência)\n• Se dependeu de alguém\n• Se houve dificuldade ou atraso',
+        type: 'paragraph',
+        req: true
+      },
+      { 
+        text: '2 Descreva suas atividades semanais\n\nInforme atividades que ocorrem ao longo da semana (não necessariamente todos os dias).\nInclua:\n• O que foi feito\n• Frequência ou momento da semana\n• Dependência de terceiros\n• Dificuldades encontradas',
+        type: 'paragraph',
+        req: true
+      },
+      { 
+        text: '3 Descreva suas atividades mensais\n\nInforme activities relacionadas a fechamento, análises ou rotinas mensais.\nInclua:\n• O que foi feito\n• Em que momento do mês ocorre\n• Dependência de terceiros\n• Problemas ou atrasos',
+        type: 'paragraph',
+        req: true
+      },
+      { 
+        text: '4 Dificuldades ou pendências gerais\n\nInforme problemas, atrasos ou atividades não concluídas.',
+        type: 'paragraph',
+        req: true
+      }
+    ];
+
+    // Check if questions exist
+    const { data: existingQ, error: queryError } = await supabaseAdmin.from('form_questions').select('id').eq('form_id', ACTIVITIES_FORM_ID);
+    
+    if (queryError) {
+      console.error('[API] Error checking activities questions:', queryError);
+      throw queryError;
+    }
+
+    // Always re-sync questions to allow easy updates/removals
+    console.log('[API] Resyncing activities questions...');
+    await supabaseAdmin.from('form_questions').delete().eq('form_id', ACTIVITIES_FORM_ID);
+    
+    const { error: insertError } = await supabaseAdmin.from('form_questions').insert(
+      activitiesQuestions.map((q, i) => ({
+        form_id: ACTIVITIES_FORM_ID,
+        question_text: q.text,
+        question_type: q.type,
+        required: q.req,
+        order_index: i
+      }))
+    );
+    
+    if (insertError) {
+      console.error('[API] Error inserting activities questions:', insertError);
+      throw insertError;
+    }
+  }
+
+  // API Route to specifically trigger Activity Mapping for everyone (without full cycle)
+  router.post('/admin/trigger-activities-mapping', async (req, res) => {
+    const { adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // 1. Verify Admin
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // 2. Ensure Form Exists (Fixes foreign key constraint error)
+      await ensureActivitiesForm();
+
+      // 3. Get all active employees
+      const { data: employees } = await supabaseAdmin.from('users').select('uid, name').eq('status', 'active').eq('role', 'employee');
+      if (!employees) throw new Error('Could not fetch employees');
+
+      const ACTIVITIES_FORM_ID = '36000000-0000-0000-0000-000000000003';
+      
+      // 3. Get existing pending mapping tasks to avoid duplicates
+      const { data: existingTasks } = await supabaseAdmin
+        .from('evaluations')
+        .select('evaluator_id')
+        .eq('evaluated_id', 'activity_mapping')
+        .eq('status', 'pending');
+
+      const existingUids = new Set(existingTasks?.map(t => t.evaluator_id) || []);
+      
+      const newTasks = employees
+        .filter(emp => !existingUids.has(emp.uid))
+        .map(emp => ({
+          evaluator_id: emp.uid,
+          evaluator_name: emp.name,
+          evaluated_id: 'activity_mapping',
+          evaluated_name: 'Mapeamento de Atividades',
+          form_id: ACTIVITIES_FORM_ID,
+          status: 'pending'
+        }));
+
+      if (newTasks.length > 0) {
+        const { error } = await supabaseAdmin.from('evaluations').insert(newTasks);
+        if (error) throw error;
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Mapeamento enviado com sucesso! ${newTasks.length} novos formulários criados. ${existingUids.size} já possuíam pendência.` 
+      });
+    } catch (error: any) {
+      console.error('Error in trigger-activities-mapping API:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // API Route to trigger a new evaluation cycle (Admin only)
   router.post('/admin/trigger-cycle', async (req, res) => {
     const { adminEmail, adminAccessKey, includeSelf } = req.body;
@@ -786,6 +983,16 @@ router.use((req, res, next) => {
           evaluated_id: 'organizational',
           evaluated_name: 'Minha Opinião sobre a Empresa',
           form_id: '36000000-0000-0000-0000-000000000002',
+          status: 'pending'
+        });
+
+        // One Activity Mapping per user
+        newEvaluations.push({
+          evaluator_id: evaluator.uid,
+          evaluator_name: evaluator.name,
+          evaluated_id: 'activity_mapping',
+          evaluated_name: 'Mapeamento de Atividades',
+          form_id: '36000000-0000-0000-0000-000000000003',
           status: 'pending'
         });
 
