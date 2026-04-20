@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   uid TEXT UNIQUE NOT NULL, -- Keep for compatibility or use UUID
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  role TEXT CHECK (role IN ('admin', 'employee')) DEFAULT 'employee',
+  role TEXT CHECK (role IN ('admin', 'employee', 'client')) DEFAULT 'employee',
   department TEXT,
   position TEXT,
   status TEXT CHECK (status IN ('active', 'inactive')) DEFAULT 'active',
@@ -102,3 +102,39 @@ CREATE TABLE IF NOT EXISTS form_questions (
 -- Modify Evaluations Table
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS form_id UUID REFERENCES forms(id) ON DELETE SET NULL;
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS answers JSONB;
+
+-- 6. Complaints Table (Ombudsman)
+CREATE TABLE IF NOT EXISTS complaints (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  protocol TEXT UNIQUE NOT NULL,
+  type TEXT CHECK (type IN ('reclamacao', 'sugestao', 'elogio', 'denuncia')) NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pendente', 'em_analise', 'resolvido', 'arquivado')) DEFAULT 'pendente',
+  response TEXT,
+  is_anonymous BOOLEAN DEFAULT true,
+  user_id TEXT, -- Optional reference to uid
+  contact_email TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Policies for Complaints
+ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Anyone can create a complaint' AND tablename = 'complaints') THEN
+        CREATE POLICY "Anyone can create a complaint" ON complaints FOR INSERT WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Anyone can view a complaint by protocol' AND tablename = 'complaints') THEN
+        CREATE POLICY "Anyone can view a complaint by protocol" ON complaints FOR SELECT USING (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Admins can view all complaints' AND tablename = 'complaints') THEN
+        CREATE POLICY "Admins can view all complaints" ON complaints FOR ALL USING (
+            EXISTS (SELECT 1 FROM users WHERE uid = auth.uid()::text AND role = 'admin')
+        );
+    END IF;
+END $$;

@@ -138,3 +138,98 @@ export async function deleteEmployeeAccount(uid: string) {
     throw error;
   }
 }
+
+export async function uploadOmbudsmanFile(file: File) {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+  const filePath = fileName;
+
+  const { data, error } = await supabase.storage
+    .from('ombudsman')
+    .upload(filePath, file);
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('ombudsman')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
+export async function submitComplaint(data: {
+  type: string;
+  subject: string;
+  description: string;
+  is_anonymous: boolean;
+  user_id?: string;
+  contact_email?: string;
+  attachments?: string[];
+}) {
+  const response = await fetch('/api/public/complaints', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Erro ao enviar relato');
+  return result;
+}
+
+export async function trackComplaint(protocol: string) {
+  const response = await fetch(`/api/public/complaints/${protocol}`);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Protocolo não encontrado');
+  return result.complaint;
+}
+
+export async function getComplaints() {
+  const savedUser = localStorage.getItem('auth_fallback_user');
+  if (!savedUser) throw new Error('Unauthorized');
+  const parsed = JSON.parse(savedUser);
+
+  const response = await fetch('/api/admin/get-complaints', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      adminEmail: parsed.email,
+      adminAccessKey: parsed.access_key || parsed.accessKey
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Erro ao buscar relatos');
+  return result.complaints;
+}
+
+export async function submitComplaintReply(protocol: string, content: string, attachments?: string[]) {
+  const response = await fetch('/api/public/complaints-reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ protocol, content, attachments }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Erro ao enviar resposta');
+  return result.complaint;
+}
+
+export async function respondToComplaint(complaintId: string, response: string, status: string, attachments?: string[]) {
+  const savedUser = localStorage.getItem('auth_fallback_user');
+  if (!savedUser) throw new Error('Unauthorized');
+  const parsed = JSON.parse(savedUser);
+
+  const res = await fetch('/api/admin/respond-complaint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      complaintId,
+      response,
+      status,
+      attachments,
+      adminEmail: parsed.email,
+      adminAccessKey: parsed.access_key || parsed.accessKey
+    }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || 'Erro ao responder relato');
+  return result.complaint;
+}

@@ -3,12 +3,27 @@ export interface User {
   uid: string; // application id
   name: string;
   email: string;
-  role: string;
+  role: 'admin' | 'employee' | 'client';
   department?: string;
   access_key: string;
   status: string;
   photo_url?: string;
   created_at: string;
+}
+
+export interface Complaint {
+  id: string;
+  protocol: string;
+  type: 'reclamacao' | 'sugestao' | 'elogio' | 'denuncia';
+  subject: string;
+  description: string;
+  status: 'pendente' | 'em_analise' | 'resolvido' | 'arquivado';
+  response?: string;
+  is_anonymous: boolean;
+  user_id?: string;
+  contact_email?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FormQuestion {

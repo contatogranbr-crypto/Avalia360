@@ -1200,6 +1200,225 @@ router.use((req, res, next) => {
   });
 
 
+  // --- Ombudsman (Ouvidoria) Routes ---
+
+  // Generate a random protocol number: AV-YYYY-XXXX (where XXXX is 6 random alphanumeric characters)
+  const generateProtocol = () => {
+    const year = new Date().getFullYear();
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `AV-${year}-${random}`;
+  };
+
+  // Citizen reply (Public) - TOP PRIORITY
+  router.post('/public/complaints-reply', async (req, res) => {
+    const { protocol, content, attachments } = req.body;
+    console.log('[API] Processing citizen reply for protocol:', protocol);
+
+    // Validate: must have protocol, and at least content or attachments
+    const hasContent = content && content.trim() !== '';
+    const hasAttachments = attachments && attachments.length > 0;
+    if (!protocol || (!hasContent && !hasAttachments)) {
+      console.log('[API] Rejecting reply: missing content and attachments');
+      return res.status(400).json({ error: 'Protocolo e conteúdo (ou anexos) são necessários.' });
+    }
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      const { data: current, error: fetchError } = await supabaseAdmin
+        .from('complaints')
+        .select('id, messages, status')
+        .eq('protocol', protocol)
+        .single();
+
+      if (fetchError || !current) {
+        return res.status(404).json({ error: 'Protocolo não encontrado.' });
+      }
+
+      const messages = current.messages || [];
+      const updatedMessages = [...messages, {
+        role: 'user',
+        content: content,
+        attachments: attachments || [],
+        timestamp: new Date().toISOString()
+      }];
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('complaints')
+        .update({
+          messages: updatedMessages,
+          status: 'em_analise',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', current.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      console.log('[API] Citizen reply successful for protocol:', protocol);
+      res.json({ success: true, complaint: updated });
+    } catch (error: any) {
+      console.error('Error in public-complaints-reply API:', error);
+      res.status(500).json({ error: 'Erro ao enviar resposta.', details: error.message });
+    }
+  });
+
+  // Submit a complaint (Public)
+  router.post('/public/complaints', async (req, res) => {
+    const { type, subject, description, is_anonymous, user_id, contact_email, attachments } = req.body;
+
+    if (!type || !subject || !description) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      const protocol = generateProtocol();
+      const { data: newComplaint, error } = await supabaseAdmin
+        .from('complaints')
+        .insert({
+          protocol,
+          type,
+          subject,
+          description,
+          is_anonymous: is_anonymous ?? true,
+          user_id,
+          contact_email,
+          status: 'pendente',
+          messages: [{
+            role: 'user',
+            content: description,
+            attachments: attachments || [],
+            timestamp: new Date().toISOString()
+          }]
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ success: true, protocol, complaint: newComplaint });
+    } catch (error: any) {
+      console.error('Error in submit-complaint API:', error);
+      res.status(500).json({ error: 'Erro ao registrar denúncia.' });
+    }
+  });
+
+  // Track a complaint (Public)
+  router.get('/public/complaints/:protocol', async (req, res) => {
+    const { protocol } = req.params;
+    const normalizedProtocol = protocol.trim().toUpperCase();
+    console.log('[API] Tracking complaint for:', normalizedProtocol);
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      const { data: complaint, error } = await supabaseAdmin
+        .from('complaints')
+        .select('protocol, type, subject, status, response, messages, created_at, updated_at')
+        .eq('protocol', normalizedProtocol)
+        .single();
+
+      if (error || !complaint) {
+        console.log('[API] Protocol not found:', normalizedProtocol, 'Error:', error?.message);
+        return res.status(404).json({ error: 'Protocolo não encontrado.' });
+      }
+
+      console.log('[API] Protocol found successfully:', normalizedProtocol);
+      res.json({ success: true, complaint });
+    } catch (error: any) {
+      console.error('Error in track-complaint API:', error);
+      res.status(500).json({ error: 'Erro ao buscar protocolo.' });
+    }
+  });
+
+  // Get all complaints (Admin Only)
+  router.post('/admin/get-complaints', async (req, res) => {
+    const { adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      const { data: complaints, error } = await supabaseAdmin
+        .from('complaints')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      res.json({ success: true, complaints });
+    } catch (error: any) {
+      console.error('Error in get-complaints API:', error);
+      res.status(500).json({ error: 'Erro ao buscar denúncias.' });
+    }
+  });
+
+  // Respond to a complaint (Admin Only)
+  router.post('/admin/respond-complaint', async (req, res) => {
+    const { complaintId, response, status, attachments, adminEmail, adminAccessKey } = req.body;
+
+    try {
+      if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
+
+      // Verify Admin
+      const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
+      const isBootstrap = bootstrapAdmins.some(a => a.email === adminEmail && a.key === adminAccessKey);
+      if (!isBootstrap) {
+        const { data: adminUser } = await supabaseAdmin.from('users').select('role, access_key').eq('email', adminEmail).single();
+        if (adminUser?.role !== 'admin' || adminUser.access_key !== adminAccessKey) {
+          return res.status(403).json({ error: 'Unauthorized' });
+        }
+      }
+
+      // 1. Get current messages
+      const { data: current } = await supabaseAdmin.from('complaints').select('messages').eq('id', complaintId).single();
+      const messages = current?.messages || [];
+      
+      // 2. Append new message conditionally
+      let updatedMessages = messages;
+      if (response?.trim() || (attachments && attachments.length > 0)) {
+        updatedMessages = [...messages, {
+          role: 'admin',
+          content: response || '',
+          attachments: attachments || [],
+          timestamp: new Date().toISOString(),
+          author: 'Administrador'
+        }];
+      }
+
+      const { data: updatedComplaint, error } = await supabaseAdmin
+        .from('complaints')
+        .update({
+          response,
+          status,
+          messages: updatedMessages,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', complaintId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ success: true, complaint: updatedComplaint });
+    } catch (error: any) {
+      console.error('Error in respond-complaint API:', error);
+      res.status(500).json({ error: 'Erro ao responder denúncia.' });
+    }
+  });
+
+
 // Vercel / Express App Wrapper
 const app = express();
 app.use(express.json());

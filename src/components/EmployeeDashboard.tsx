@@ -87,6 +87,16 @@ export const EmployeeDashboard = () => {
         
         {currentUser && (
           <div className="flex items-center gap-4 bg-white p-3 pr-6 rounded-2xl border shadow-sm">
+            <div className="relative">
+              <img 
+                src="https://twxdjqsggoavycuudwzt.supabase.co/storage/v1/object/public/system/logo.png" 
+                className="h-10 w-auto object-contain"
+                alt="Logo"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+                }}
+              />
+            </div>
             <Avatar className="h-12 w-12 border-2 border-primary/10">
               <AvatarImage src={currentUser.photo_url} />
               <AvatarFallback className="bg-primary/5 text-primary font-bold">

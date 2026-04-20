@@ -36,11 +36,22 @@ export const Login = () => {
       <Card className="w-[400px] shadow-xl border-t-4 border-t-primary">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-primary/10 rounded-full">
-              <ShieldCheck className="w-10 h-10 text-primary" />
+            <div className="relative">
+              <img 
+                src="https://twxdjqsggoavycuudwzt.supabase.co/storage/v1/object/public/system/logo.png" 
+                className="h-20 w-auto object-contain mx-auto"
+                alt="Logo"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+                  (e.target as HTMLImageElement).nextElementSibling!.classList.remove('hidden');
+                }}
+              />
+              <div className="p-4 bg-primary/10 rounded-full hidden">
+                <ShieldCheck className="w-12 h-12 text-primary" />
+              </div>
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Avalia360</CardTitle>
+          <CardTitle className="text-2xl font-bold">Avalia360 - Gran Bernardo</CardTitle>
           <CardDescription>Sistema Interno de Avaliação de Desempenho</CardDescription>
         </CardHeader>
         <CardContent>
@@ -85,6 +96,17 @@ export const Login = () => {
           <p className="mt-6 text-xs text-center text-muted-foreground">
             Acesso restrito a colaboradores autorizados.
           </p>
+
+          <div className="mt-8 pt-6 border-t flex flex-col items-center">
+            <p className="text-sm text-slate-500 mb-3 font-medium">Outros Canais</p>
+            <Button 
+              variant="outline" 
+              className="w-full gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary"
+              onClick={() => (window as any).showOmbudsman()}
+            >
+              <ShieldCheck className="w-4 h-4" /> Canal de Ouvidoria (Anônimo)
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

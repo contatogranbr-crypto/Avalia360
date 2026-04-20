@@ -11,7 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, Trash2, Copy, ExternalLink, Star, RefreshCw, Settings, Calendar, Send, Search, Filter, Layers, FileText, SendHorizontal, Camera, Upload, Download, FileDown } from 'lucide-react';
+import { 
+  Users, ClipboardList, CheckCircle2, AlertCircle, UserPlus, 
+  BarChart3, TrendingUp, Lock, Pencil, Mail, ShieldAlert, 
+  MessageSquare, Trash2, Copy, ExternalLink, Star, RefreshCw, 
+  Settings, Calendar, Send, Search, Filter, Layers, FileText, 
+  SendHorizontal, Camera, Upload, Download, FileDown, Eye,
+  Paperclip, X, ImageIcon, FileIcon, FilmIcon, Loader2
+} from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createEmployeeAccount, updateEmployeeProfile, deleteEmployeeAccount } from '../services';
@@ -21,6 +28,47 @@ import { TriggerCycleDialog } from './TriggerCycleDialog';
 import { FormBuilder } from './FormBuilder';
 import { Form, FormQuestion } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
+import { uploadOmbudsmanFile, respondToComplaint } from '../services';
+
+interface AttachmentDisplayProps {
+  url: string;
+}
+
+const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({ url }) => {
+  const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)/i);
+  const isVideo = url.match(/\.(mp4|webm|mov)/i);
+  const isPDF = url.match(/\.pdf/i);
+
+  if (isImage) {
+    return (
+      <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 bg-white max-w-[200px]">
+        <img src={url} alt="Anexo" className="w-full h-auto cursor-pointer" onClick={() => window.open(url, '_blank')} />
+      </div>
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 bg-white max-w-[200px]">
+        <video src={url} controls className="w-full h-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <Button 
+      variant="outline" 
+      size="sm" 
+      className="mt-2 gap-2 text-[10px] h-8"
+      onClick={() => window.open(url, '_blank')}
+    >
+      {isPDF ? <FileIcon className="w-3.5 h-3.5 text-red-500" /> : <Paperclip className="w-3.5 h-3.5" />}
+      Ver Documento
+      <Download className="w-3 h-3 ml-1" />
+    </Button>
+  );
+};
 
 export const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -34,6 +82,13 @@ export const AdminDashboard = () => {
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [complaints, setComplaints] = useState<any[]>([]);
+  const [isRespondingComplaint, setIsRespondingComplaint] = useState(false);
+  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
+  const [adminResponse, setAdminResponse] = useState('');
+  const [complaintStatus, setComplaintStatus] = useState('');
+  const [selectedAdminFiles, setSelectedAdminFiles] = useState<File[]>([]);
+  const [isUploadingAdminFiles, setIsUploadingAdminFiles] = useState(false);
 
   const handleImageUpload = async (file: File, isEditing = false) => {
     try {
@@ -170,6 +225,20 @@ export const AdminDashboard = () => {
           qMap[q.form_id!].push(q);
         });
         setQuestionsMap(qMap);
+      }
+
+      // Fetch Complaints
+      const complaintsResponse = await fetch('/api/admin/get-complaints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail: parsed.email,
+          adminAccessKey: parsed.access_key || parsed.accessKey
+        })
+      });
+      const complaintsData = await complaintsResponse.json();
+      if (complaintsData.success) {
+        setComplaints(complaintsData.complaints || []);
       }
 
     } catch (error) {
@@ -328,6 +397,54 @@ export const AdminDashboard = () => {
       supabase.removeChannel(evalsChannel);
     };
   }, []);
+
+  const handleRespondComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedComplaint) return;
+    setLoading(true);
+    try {
+      const savedUser = localStorage.getItem('auth_fallback_user');
+      if (!savedUser) return;
+      const parsed = JSON.parse(savedUser);
+
+      // 1. Upload files first if any
+      let attachmentUrls: string[] = [];
+      if (selectedAdminFiles.length > 0) {
+        setIsUploadingAdminFiles(true);
+        try {
+          attachmentUrls = await Promise.all(selectedAdminFiles.map(async (file) => {
+            try {
+              return await uploadOmbudsmanFile(file);
+            } catch (err: any) {
+              console.error(`Erro ao subir arquivo ${file.name}:`, err);
+              throw new Error(`Falha no upload de "${file.name}". Verifique o tamanho (máx 10MB).`);
+            }
+          }));
+        } finally {
+          setIsUploadingAdminFiles(false);
+        }
+      }
+
+      await respondToComplaint(
+        selectedComplaint.id,
+        adminResponse,
+        complaintStatus,
+        attachmentUrls
+      );
+
+      toast.success('Resposta enviada com sucesso!');
+      setIsRespondingComplaint(false);
+      setAdminResponse('');
+      setSelectedAdminFiles([]);
+      fetchData();
+    } catch (error: any) {
+      console.error('Erro detalhado na resposta do admin:', error);
+      toast.error(error.message || 'Erro ao responder relato. Tente novamente.');
+    } finally {
+      setLoading(false);
+      setIsUploadingAdminFiles(false);
+    }
+  };
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -576,7 +693,7 @@ export const AdminDashboard = () => {
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
-          doc.text('Avalia360', 12, currentY + 10);
+          doc.text('Avalia360 - Gran Bernardo', 12, currentY + 10);
           
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
@@ -667,7 +784,7 @@ export const AdminDashboard = () => {
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, 285, { align: 'center' });
-        doc.text('Gerado automaticamente pelo Sistema Avalia360', pageWidth / 2, 290, { align: 'center' });
+        doc.text('Gerado automaticamente pelo Sistema Avalia360 - Gran Bernardo', pageWidth / 2, 290, { align: 'center' });
       }
 
       doc.save(`relatorio_log_avalia360_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -866,12 +983,13 @@ export const AdminDashboard = () => {
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="employee">Colaborador</SelectItem>
-                      <SelectItem value="admin">Administrador</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <SelectContent>
+                        <SelectItem value="employee">Colaborador</SelectItem>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="client">Cliente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Chave de Acesso Inicial</Label>
                   <div className="relative">
@@ -912,8 +1030,11 @@ export const AdminDashboard = () => {
           <TabsTrigger value="forms" className="rounded-lg px-6 py-2">
             <FileText className="h-4 w-4 mr-2" /> Formulários
           </TabsTrigger>
-          <TabsTrigger value="logs" className="rounded-lg px-6 py-2">
-            <ClipboardList className="h-4 w-4 mr-2" /> Log Ciclos
+          <TabsTrigger value="logs" className="gap-2">
+            <ClipboardList className="h-4 w-4" /> Auditoria
+          </TabsTrigger>
+          <TabsTrigger value="complaints" className="gap-2">
+            <ShieldAlert className="h-4 w-4 text-amber-500" /> Ouvidoria
           </TabsTrigger>
         </TabsList>
 
@@ -1394,7 +1515,238 @@ export const AdminDashboard = () => {
         </CardContent>
       </Card>
     </TabsContent>
+
+    <TabsContent value="complaints">
+      <Card className="shadow-xl border-t-4 border-t-primary">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-primary" /> Ouvidoria e Denúncias
+              </CardTitle>
+              <CardDescription>Gerencie os relatos e denúncias enviados pelo canal público.</CardDescription>
+            </div>
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+              {complaints.length} Relatos
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead className="font-bold">Status</TableHead>
+                  <TableHead className="font-bold">Protocolo</TableHead>
+                  <TableHead className="font-bold">Tipo</TableHead>
+                  <TableHead className="font-bold">Assunto</TableHead>
+                  <TableHead className="font-bold">Data</TableHead>
+                  <TableHead className="text-right font-bold">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {complaints.length > 0 ? complaints.map((complaint) => (
+                  <TableRow key={complaint.id}>
+                    <TableCell>
+                      {complaint.status === 'pendente' && <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">Pendente</Badge>}
+                      {complaint.status === 'em_analise' && <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">Em Análise</Badge>}
+                      {complaint.status === 'resolvido' && <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">Resolvido</Badge>}
+                      {complaint.status === 'arquivado' && <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">Arquivado</Badge>}
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-xs">{complaint.protocol}</TableCell>
+                    <TableCell className="capitalize text-xs">{complaint.type}</TableCell>
+                    <TableCell className="max-w-[200px] truncate font-medium">{complaint.subject}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(complaint.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                    <TableCell className="text-right flex justify-end gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        title="Ver Detalhes"
+                        onClick={() => {
+                          setSelectedComplaint(complaint);
+                          setAdminResponse(complaint.response || '');
+                          setComplaintStatus(complaint.status);
+                          setIsRespondingComplaint(true);
+                        }}
+                      >
+                        <Eye className="h-4 w-4 text-slate-500" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => {
+                          setSelectedComplaint(complaint);
+                          setAdminResponse(complaint.response || '');
+                          setComplaintStatus(complaint.status);
+                          setIsRespondingComplaint(true);
+                        }}
+                      >
+                        <Send className="h-4 w-4" /> Responder
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                      Nenhum relato recebido até o momento.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </TabsContent>
   </Tabs>
+
+  {/* Responding Complaint Dialog */}
+  <Dialog open={isRespondingComplaint} onOpenChange={setIsRespondingComplaint}>
+    <DialogContent className="sm:max-w-[600px]">
+      <DialogHeader>
+        <DialogTitle>Detalhes e Resposta ao Relato</DialogTitle>
+        <DialogDescription>Protocolo: <span className="font-mono font-bold">{selectedComplaint?.protocol}</span></DialogDescription>
+      </DialogHeader>
+      {selectedComplaint && (
+        <form onSubmit={handleRespondComplaint} className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-slate-50 rounded-lg border">
+              <Label className="text-[10px] uppercase text-slate-400 font-bold block mb-1">Tipo</Label>
+              <p className="text-sm font-semibold capitalize">{selectedComplaint.type}</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg border">
+              <Label className="text-[10px] uppercase text-slate-400 font-bold block mb-1">Data de Envio</Label>
+              <p className="text-sm font-semibold">{new Date(selectedComplaint.created_at).toLocaleString('pt-BR')}</p>
+            </div>
+          </div>
+          
+          <div className="p-3 bg-slate-50 rounded-lg border">
+            <Label className="text-[10px] uppercase text-slate-400 font-bold block mb-1">Assunto</Label>
+            <p className="text-sm font-semibold">{selectedComplaint.subject}</p>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-lg border">
+            <Label className="text-[10px] uppercase text-slate-400 font-bold block mb-1">Descrição</Label>
+            <p className="text-sm whitespace-pre-wrap">{selectedComplaint.description}</p>
+            {selectedComplaint.attachments && selectedComplaint.attachments.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-slate-200">
+                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Anexos do Cidadão</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedComplaint.attachments.map((url: string, i: number) => (
+                    <AttachmentDisplay url={url} key={`admin-attach-${i}`} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {!selectedComplaint.is_anonymous && selectedComplaint.contact_email && (
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <Label className="text-[10px] uppercase text-primary font-bold block mb-1 flex items-center gap-1">
+                <Mail className="h-3 w-3" /> E-mail de Contato
+              </Label>
+              <p className="text-sm font-semibold">{selectedComplaint.contact_email}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={complaintStatus} onValueChange={setComplaintStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="em_analise">Em Análise</SelectItem>
+                <SelectItem value="resolvido">Resolvido</SelectItem>
+                <SelectItem value="arquivado">Arquivado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Conversation History */}
+          {selectedComplaint.messages && selectedComplaint.messages.length > 0 && (
+            <div className="space-y-3 mt-4 border-t pt-4">
+              <Label className="text-[10px] uppercase text-slate-400 font-bold block mb-2">Histórico da Conversa</Label>
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                {selectedComplaint.messages.map((msg: any, idx: number) => (
+                  <div key={idx} className={`flex ${msg.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`${msg.role === 'admin' ? 'bg-primary/10 border-primary/20' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 max-w-[90%] shadow-sm`}>
+                      <p className={`text-[10px] font-bold mb-1 ${msg.role === 'admin' ? 'text-primary' : 'text-slate-500'}`}>
+                        {msg.role === 'admin' ? 'Administração' : 'Usuário / Protocolo'}
+                      </p>
+                      <p className="text-xs text-slate-800 whitespace-pre-wrap">{msg.content}</p>
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={`mt-2 pt-2 border-t ${msg.role === 'admin' ? 'border-primary/20' : 'border-slate-200'}`}>
+                          <div className="flex flex-wrap gap-1.5">
+                            {msg.attachments.map((url: string, j: number) => (
+                              <AttachmentDisplay url={url} key={`admin-msg-attach-${j}`} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[8px] text-slate-400 mt-1">{new Date(msg.timestamp).toLocaleString('pt-BR')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Response Form */}
+          {!(selectedComplaint.status === 'resolvido' || selectedComplaint.status === 'arquivado') ? (
+            <div className="space-y-3">
+              <Label>Sua Próxima Resposta (Visível para o autor)</Label>
+              <Textarea 
+                placeholder="Escreva sua resposta ou feedback..."
+                className="min-h-[80px]"
+                value={adminResponse}
+                onChange={e => setAdminResponse(e.target.value)}
+              />
+              
+              {/* Admin File Selection */}
+              <div className="flex flex-wrap gap-2">
+                {selectedAdminFiles.map((file, i) => (
+                  <div key={i} className="relative bg-slate-50 border rounded p-1 px-2 flex items-center gap-2 pr-6">
+                    {file.type.startsWith('image/') ? <ImageIcon className="w-3 h-3 text-blue-500" /> : <FileIcon className="w-3 h-3 text-slate-500" />}
+                    <span className="text-[9px] max-w-[80px] truncate">{file.name}</span>
+                    <button type="button" onClick={() => setSelectedAdminFiles(f => f.filter((_, idx) => idx !== i))} className="absolute right-1 top-1 text-slate-300 hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
+                  </div>
+                ))}
+                <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded cursor-pointer hover:bg-slate-50 transition-colors text-[10px] font-medium text-slate-600">
+                  <input type="file" className="hidden" multiple onChange={e => {
+                    if (e.target.files) setSelectedAdminFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                  }} />
+                  <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                  Anexar Arquivos
+                </label>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 bg-slate-100 rounded-lg text-center border">
+              <p className="text-sm font-semibold text-slate-600">Este relato está encerrado.</p>
+              <p className="text-xs text-slate-500 mt-1">Para enviar uma nova mensagem, altere o status acima para "Pendente" ou "Em Análise" e salve as alterações para reabrir o chamado.</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="ghost" className="flex-1" onClick={() => setIsRespondingComplaint(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={loading || isUploadingAdminFiles}>
+              {loading || isUploadingAdminFiles ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  {isUploadingAdminFiles ? 'Enviando...' : 'Salvando...'}
+                </>
+              ) : ((selectedComplaint.status === 'resolvido' || selectedComplaint.status === 'arquivado') ? 'Salvar Novo Status' : 'Salvar Resposta')}
+            </Button>
+          </div>
+        </form>
+      )}
+    </DialogContent>
+  </Dialog>
 
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
