@@ -164,6 +164,11 @@ export const AdminDashboard = () => {
   const [deptFilter, setDeptFilter] = useState('all');
   const [selectedFormIdForCycle, setSelectedFormIdForCycle] = useState<string | undefined>(undefined);
 
+  // Complaint Filters
+  const [complaintStatusFilter, setComplaintStatusFilter] = useState('all');
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState('all');
+  const [complaintSearchTerm, setComplaintSearchTerm] = useState('');
+
   const fetchData = async () => {
     const savedUser = localStorage.getItem('auth_fallback_user');
     if (!savedUser) return;
@@ -1532,6 +1537,63 @@ export const AdminDashboard = () => {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-col md:flex-row gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div className="flex-1">
+              <Label className="text-xs mb-1.5 block text-slate-500 font-bold">Buscar Protocolo / Assunto</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input 
+                  placeholder="Pesquisar..." 
+                  className="pl-9 bg-white"
+                  value={complaintSearchTerm}
+                  onChange={e => setComplaintSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="w-full md:w-48">
+              <Label className="text-xs mb-1.5 block text-slate-500 font-bold">Status do Relato</Label>
+              <Select value={complaintStatusFilter} onValueChange={setComplaintStatusFilter}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue>
+                    {complaintStatusFilter === 'all' ? 'Todos os Status' : 
+                     complaintStatusFilter === 'pendente' ? 'Pendente' :
+                     complaintStatusFilter === 'em_analise' ? 'Em Análise' :
+                     complaintStatusFilter === 'resolvido' ? 'Resolvido' : 'Arquivado'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Status</SelectItem>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="em_analise">Em Análise</SelectItem>
+                  <SelectItem value="resolvido">Resolvido</SelectItem>
+                  <SelectItem value="arquivado">Arquivado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-full md:w-48">
+              <Label className="text-xs mb-1.5 block text-slate-500 font-bold">Tipo de Relato</Label>
+              <Select value={complaintTypeFilter} onValueChange={setComplaintTypeFilter}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue>
+                    {complaintTypeFilter === 'all' ? 'Todos os Tipos' : 
+                     complaintTypeFilter === 'reclamacao' ? 'Reclamação' :
+                     complaintTypeFilter === 'sugestao' ? 'Sugestão' :
+                     complaintTypeFilter === 'elogio' ? 'Elogio' : 'Denúncia'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  <SelectItem value="reclamacao">Reclamação</SelectItem>
+                  <SelectItem value="sugestao">Sugestão</SelectItem>
+                  <SelectItem value="elogio">Elogio</SelectItem>
+                  <SelectItem value="denuncia">Denúncia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="rounded-xl border overflow-hidden">
             <Table>
               <TableHeader className="bg-slate-50">
@@ -1545,7 +1607,17 @@ export const AdminDashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {complaints.length > 0 ? complaints.map((complaint) => (
+                {(() => {
+                  const filteredComplaints = complaints.filter(c => {
+                    const matchesStatus = complaintStatusFilter === 'all' || c.status === complaintStatusFilter;
+                    const matchesType = complaintTypeFilter === 'all' || c.type === complaintTypeFilter;
+                    const matchesSearch = complaintSearchTerm === '' || 
+                      c.protocol.toLowerCase().includes(complaintSearchTerm.toLowerCase()) || 
+                      c.subject.toLowerCase().includes(complaintSearchTerm.toLowerCase());
+                    return matchesStatus && matchesType && matchesSearch;
+                  });
+
+                  return filteredComplaints.length > 0 ? filteredComplaints.map((complaint) => (
                   <TableRow key={complaint.id}>
                     <TableCell>
                       {complaint.status === 'pendente' && <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">Pendente</Badge>}
@@ -1554,7 +1626,12 @@ export const AdminDashboard = () => {
                       {complaint.status === 'arquivado' && <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">Arquivado</Badge>}
                     </TableCell>
                     <TableCell className="font-mono font-bold text-xs">{complaint.protocol}</TableCell>
-                    <TableCell className="capitalize text-xs">{complaint.type}</TableCell>
+                    <TableCell className="capitalize text-xs">
+                      {complaint.type === 'reclamacao' ? 'Reclamação' : 
+                       complaint.type === 'sugestao' ? 'Sugestão' : 
+                       complaint.type === 'denuncia' ? 'Denúncia' : 
+                       complaint.type}
+                    </TableCell>
                     <TableCell className="max-w-[200px] truncate font-medium">{complaint.subject}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{new Date(complaint.created_at).toLocaleDateString('pt-BR')}</TableCell>
                     <TableCell className="text-right flex justify-end gap-1">
@@ -1589,10 +1666,13 @@ export const AdminDashboard = () => {
                 )) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                      Nenhum relato recebido até o momento.
+                      {complaints.length === 0 
+                        ? 'Nenhum relato recebido até o momento.' 
+                        : 'Nenhum relato encontrado com os filtros selecionados.'}
                     </TableCell>
                   </TableRow>
-                )}
+                )
+                })()}
               </TableBody>
             </Table>
           </div>
