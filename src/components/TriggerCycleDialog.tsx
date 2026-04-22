@@ -63,8 +63,8 @@ export const TriggerCycleDialog: React.FC<TriggerCycleDialogProps> = ({ open, on
       if (cycleType === 'legacy') {
         await onTriggerLegacy(includeSelf);
       } else {
-        if (evaluatorIds.length === 0 || evaluatedIds.length === 0) {
-          toast.error('Selecione pelo menos um avaliador e um avaliado.');
+        if (evaluatorIds.length === 0) {
+          toast.error('Selecione pelo menos um avaliador.');
           setLoading(false);
           return;
         }

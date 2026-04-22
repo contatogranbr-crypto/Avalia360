@@ -1048,9 +1048,11 @@ router.use((req, res, next) => {
     try {
       if (!supabaseAdmin) return res.status(500).json({ error: 'Supabase não configurado.' });
 
-      if (!evaluatorIds || !evaluatedIds || evaluatorIds.length === 0 || evaluatedIds.length === 0) {
-        return res.status(400).json({ error: 'Selecione ao menos um avaliador e um avaliado.' });
+      if (!evaluatorIds || evaluatorIds.length === 0) {
+        return res.status(400).json({ error: 'Selecione ao menos um avaliador.' });
       }
+      
+      const safeEvaluatedIds = evaluatedIds || [];
 
       // Verify Admin
       const bootstrapAdmins = [{ email: 'consultoria@granbernardo.com', key: '91015513' }];
@@ -1067,22 +1069,47 @@ router.use((req, res, next) => {
       if (!users) throw new Error('Could not fetch users');
 
       const evaluators = users.filter(u => evaluatorIds.includes(u.uid));
-      const targets = users.filter(u => evaluatedIds.includes(u.uid));
+      const targets = users.filter(u => safeEvaluatedIds.includes(u.uid));
 
       const newEvaluations: any[] = [];
-      evaluators.forEach(evaluator => {
-        targets.forEach(target => {
-          // Rule: do we permit self-eval in custom cycle? I'll allow if explicitly selected.
+
+      if (targets.length === 0) {
+        // If no target is selected, create a general/self evaluation
+        let targetName = 'Autoavaliação';
+        let targetId = 'self';
+
+        if (formId) {
+          const { data: form } = await supabaseAdmin.from('forms').select('title').eq('id', formId).single();
+          if (form) {
+            targetName = form.title;
+            targetId = `form_${formId}`;
+          }
+        }
+
+        evaluators.forEach(evaluator => {
           newEvaluations.push({
             form_id: formId || null,
             evaluator_id: evaluator.uid,
             evaluator_name: evaluator.name,
-            evaluated_id: target.uid,
-            evaluated_name: target.name,
+            evaluated_id: targetId,
+            evaluated_name: targetName,
             status: 'pending'
           });
         });
-      });
+      } else {
+        evaluators.forEach(evaluator => {
+          targets.forEach(target => {
+            newEvaluations.push({
+              form_id: formId || null,
+              evaluator_id: evaluator.uid,
+              evaluator_name: evaluator.name,
+              evaluated_id: target.uid,
+              evaluated_name: target.name,
+              status: 'pending'
+            });
+          });
+        });
+      }
 
       if (newEvaluations.length > 0) {
         const { error: insertError } = await supabaseAdmin.from('evaluations').insert(newEvaluations);
