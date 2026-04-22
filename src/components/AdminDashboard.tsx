@@ -1474,8 +1474,18 @@ export const AdminDashboard = () => {
                       <TableCell className="text-muted-foreground text-xs font-mono">
                         {new Date(evalItem.completed_at || evalItem.created_at).toLocaleDateString('pt-BR')}
                       </TableCell>
-                      <TableCell className="font-medium text-slate-700">{evalItem.evaluator_name}</TableCell>
-                      <TableCell className="font-medium text-slate-700">{evalItem.evaluated_name}</TableCell>
+                      <TableCell className="font-medium text-slate-700">
+                        {evalItem.evaluator_name}
+                        <span className="block text-xs text-slate-400 font-normal">
+                          {users.find(u => u.uid === evalItem.evaluator_id)?.department || ''}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-700">
+                        {evalItem.evaluated_name}
+                        <span className="block text-xs text-slate-400 font-normal">
+                          {users.find(u => u.uid === evalItem.evaluated_id)?.department || ''}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         {evalItem.status === 'completed' ? (
                           <div className="flex items-center gap-0.5">
