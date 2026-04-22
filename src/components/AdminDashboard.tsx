@@ -725,12 +725,17 @@ export const AdminDashboard = () => {
         const dateStr = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
         const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
 
+        const evaluatedUser = users.find(u => u.uid === e.evaluated_id);
+        const evaluatorUser = users.find(u => u.uid === e.evaluator_id);
+        const evaluatedDept = evaluatedUser?.department ? ` (${evaluatedUser.department})` : '';
+        const evaluatorDept = evaluatorUser?.department ? ` (${evaluatorUser.department})` : '';
+
         autoTable(doc, {
           startY: currentY + 5,
           head: [],
           body: [
-            ['Avaliado:', e.evaluated_name || '-', 'Data:', dateStr],
-            ['Avaliador:', e.evaluator_name || '-', 'Status:', statusLabel],
+            ['Avaliado:', `${e.evaluated_name || '-'}${evaluatedDept}`, 'Data:', dateStr],
+            ['Avaliador:', `${e.evaluator_name || '-'}${evaluatorDept}`, 'Status:', statusLabel],
             ['', '', 'Nota:', rating]
           ],
           theme: 'plain',
@@ -812,8 +817,14 @@ export const AdminDashboard = () => {
       const rows = filteredEvaluations.map(e => {
         const status = e.status === 'completed' ? 'Concluído' : 'Pendente';
         const date = new Date(e.completed_at || e.created_at).toLocaleDateString('pt-BR');
-        const evaluator = e.evaluator_name || '-';
-        const evaluated = e.evaluated_name || '-';
+        
+        const evaluatedUser = users.find(u => u.uid === e.evaluated_id);
+        const evaluatorUser = users.find(u => u.uid === e.evaluator_id);
+        const evaluatedDept = evaluatedUser?.department ? ` (${evaluatedUser.department})` : '';
+        const evaluatorDept = evaluatorUser?.department ? ` (${evaluatorUser.department})` : '';
+        
+        const evaluator = e.evaluator_name ? `${e.evaluator_name}${evaluatorDept}` : '-';
+        const evaluated = e.evaluated_name ? `${e.evaluated_name}${evaluatedDept}` : '-';
         const rating = e.status === 'completed' ? getEvaluationScore(e).toFixed(1) : '-';
         
         // Handle comment or answers for custom forms
