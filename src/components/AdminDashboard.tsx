@@ -162,6 +162,7 @@ export const AdminDashboard = () => {
   const [evaluatorFilter, setEvaluatorFilter] = useState('all');
   const [evaluatedFilter, setEvaluatedFilter] = useState('all');
   const [deptFilter, setDeptFilter] = useState('all');
+  const [formFilter, setFormFilter] = useState('all');
   const [selectedFormIdForCycle, setSelectedFormIdForCycle] = useState<string | undefined>(undefined);
 
   // Complaint Filters
@@ -652,9 +653,13 @@ export const AdminDashboard = () => {
       const evaluatedUser = users.find(u => u.uid === evalItem.evaluated_id);
       const matchesDept = deptFilter === 'all' || evaluatedUser?.department === deptFilter;
 
-      return matchesSearch && matchesStatus && matchesEvaluator && matchesEvaluated && matchesDept;
+      const matchesForm = 
+        formFilter === 'all' || 
+        (formFilter === 'null' ? !evalItem.form_id : evalItem.form_id === formFilter);
+
+      return matchesSearch && matchesStatus && matchesEvaluator && matchesEvaluated && matchesDept && matchesForm;
     }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [evaluations, searchTerm, statusFilter, evaluatorFilter, evaluatedFilter, deptFilter, users]);
+  }, [evaluations, searchTerm, statusFilter, evaluatorFilter, evaluatedFilter, deptFilter, formFilter, users]);
 
   // Dynamic Average for filtered set
   const filteredAverage = useMemo(() => {
@@ -1439,6 +1444,26 @@ export const AdminDashboard = () => {
                   <SelectItem value="all">Todos os setores</SelectItem>
                   {departments.map(dept => (
                     <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-56 space-y-1.5">
+              <Label className="text-[11px] font-bold text-slate-500 uppercase">Formulário</Label>
+              <Select value={formFilter} onValueChange={setFormFilter}>
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue>
+                    {formFilter === 'all' ? 'Todos os formulários' : 
+                     formFilter === 'null' ? 'Padrão / Geral' : 
+                     (forms.find(f => f.id === formFilter)?.title || 'Todos')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os formulários</SelectItem>
+                  <SelectItem value="null">Padrão / Geral</SelectItem>
+                  {forms.map(form => (
+                    <SelectItem key={form.id} value={form.id}>{form.title}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
